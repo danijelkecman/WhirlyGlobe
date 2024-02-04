@@ -1432,12 +1432,12 @@
 		88E4B8B61B83B6AB0050D21B = {
 			isa = PBXGroup;
 			children = (
-				311C6A0427B1AC7E0016BC7E /* wkDefaultShaders.metal */,
 				88E4B8C11B83B6AB0050D21B /* AutoTester */,
 				88E4B8C01B83B6AB0050D21B /* Products */,
 				88FF5BDF1BC31D3C002F15CE /* Resources */,
 				3651D5D283D23F0C2EFDE845 /* Frameworks */,
 				B896A30D27C259475AB0907B /* Pods */,
+				311C6A0427B1AC7E0016BC7E /* wkDefaultShaders.metal */,
 			);
 			sourceTree = "<group>";
 		};
