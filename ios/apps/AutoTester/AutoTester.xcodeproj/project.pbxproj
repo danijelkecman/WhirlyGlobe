@@ -2790,7 +2790,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				MACOSX_DEPLOYMENT_TARGET = 10.9;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -2843,7 +2843,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				MACOSX_DEPLOYMENT_TARGET = 10.9;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
@@ -2874,6 +2874,7 @@
 					"\"$(SRCROOT)/../../../common/WhirlyGlobeLib/include\"",
 				);
 				INFOPLIST_FILE = AutoTester/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mousebirdconsulting.AutoTesterApp;
@@ -2909,6 +2910,7 @@
 					"\"$(SRCROOT)/../../../common/WhirlyGlobeLib/include\"",
 				);
 				INFOPLIST_FILE = AutoTester/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mousebirdconsulting.AutoTesterApp;

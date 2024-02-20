@@ -130,6 +130,6 @@
 
 @end
 
-void DDXMLElementDummyFunc()
+void DDXMLElementDummyFunc(void)
 {
 }
