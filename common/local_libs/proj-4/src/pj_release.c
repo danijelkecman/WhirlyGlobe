@@ -4,7 +4,7 @@
 
 char const pj_release[]="Rel. 4.9.3, dd Month yyyy";
 
-const char *pj_get_release()
+const char *pj_get_release(void)
 
 {
     return pj_release;

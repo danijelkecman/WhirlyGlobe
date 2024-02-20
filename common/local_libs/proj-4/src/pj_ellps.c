@@ -50,7 +50,7 @@ pj_ellps[] = {
 {NULL,		NULL,			NULL,			NULL}
 };
 
-struct PJ_ELLPS *pj_get_ellps_ref()
+struct PJ_ELLPS *pj_get_ellps_ref(void)
 
 {
     return pj_ellps;

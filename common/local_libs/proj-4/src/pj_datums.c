@@ -64,7 +64,7 @@ C_NAMESPACE_VAR struct PJ_DATUMS pj_datums[] = {
 {NULL,      NULL,                                    NULL,    NULL}
 };
 
-struct PJ_DATUMS *pj_get_datums_ref()
+struct PJ_DATUMS *pj_get_datums_ref(void)
 
 {
     return pj_datums;

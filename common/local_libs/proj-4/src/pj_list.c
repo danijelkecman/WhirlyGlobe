@@ -4,7 +4,7 @@
 #define USE_PJ_LIST_H 1
 #include "projects.h"
 
-struct PJ_LIST  *pj_get_list_ref()
+struct PJ_LIST  *pj_get_list_ref(void)
 
 {
     return pj_list;

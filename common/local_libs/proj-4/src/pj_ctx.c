@@ -57,7 +57,7 @@ void pj_set_ctx( projPJ pj, projCtx ctx )
 /*                         pj_get_default_ctx()                         */
 /************************************************************************/
 
-projCtx pj_get_default_ctx()
+projCtx pj_get_default_ctx(void)
 
 {
     pj_acquire_lock();
@@ -93,7 +93,7 @@ projCtx pj_get_default_ctx()
 /*                            pj_ctx_alloc()                            */
 /************************************************************************/
 
-projCtx pj_ctx_alloc()
+projCtx pj_ctx_alloc(void)
 
 {
     projCtx ctx = (projCtx_t *) malloc(sizeof(projCtx_t));

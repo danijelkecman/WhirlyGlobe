@@ -39,13 +39,13 @@
 }
 
 /// Scene we're messing with
-@property (nonatomic,readonly) WhirlyKit::Scene *scene;
+@property (nonatomic,readonly) WhirlyKit::Scene * _Nonnull scene;
 /// Run loop created within our main
-@property (nonatomic,readonly) NSRunLoop *runLoop;
+@property (nonatomic,readonly) NSRunLoop * _Nullable runLoop;
 /// Used to let layers get view change notices
-@property (nonatomic,strong) WhirlyKitLayerViewWatcher *viewWatcher;
+@property (nonatomic,strong) WhirlyKitLayerViewWatcher * _Nonnull viewWatcher;
 /// The renderer we're working with
-@property (nonatomic) WhirlyKit::SceneRenderer *renderer;
+@property (nonatomic) WhirlyKit::SceneRenderer * _Nonnull renderer;
 /// Turn this off to disable flushes to GL on the layer thread.
 /// The only reason to do this is going to background.  This is a temporary fix
 @property (nonatomic,assign) bool allowFlush;
@@ -53,33 +53,33 @@
 @property (nonatomic,assign) bool mainLayerThread;
 
 /// Set up with a scene and a view
-- (id)initWithScene:(WhirlyKit::Scene *)inScene
-               view:(WhirlyKit::View *)inView
-           renderer:(WhirlyKit::SceneRenderer *)renderer
+- (id _Nullable )initWithScene:(WhirlyKit::Scene *_Nonnull)inScene
+                          view:(WhirlyKit::View *_Nonnull)inView
+                      renderer:(WhirlyKit::SceneRenderer *_Nonnull)renderer
     mainLayerThread:(bool)mainLayerThread
       renderControl:(MaplyRenderController *__nullable)renderControl;
 
 /// Add these before you kick off the thread
-- (void)addLayer:(NSObject<WhirlyKitLayer> *)layer;
+- (void)addLayer:(NSObject<WhirlyKitLayer> *_Nonnull)layer;
 
 /// Remove the given layer.
-- (void)removeLayer:(NSObject<WhirlyKitLayer> *)layer;
+- (void)removeLayer:(NSObject<WhirlyKitLayer> *_Nonnull)layer;
 
 /// Add a C++ object to be deleted after the thread has stopped
 /// Always call this from the main thread before you cancel the layer thread
-- (void)addThingToDelete:(WhirlyKit::DelayedDeletable *)thing;
+- (void)addThingToDelete:(WhirlyKit::DelayedDeletable *_Nonnull)thing;
 
 /// Add an Objective C object to release after the thread has stopped
 /// Always call this from the main thread before you cancel the layer thread
-- (void)addThingToRelease:(NSObject *)thing;
+- (void)addThingToRelease:(NSObject *_Nonnull)thing;
 
 /// If this is the main thread, we'll ask it to shut down any other layer threads.
 /// Doing it like this avoids any problems we may have with shutdown synchronization
-- (void)addThreadToShutdown:(WhirlyKitLayerThread *)thread;
+- (void)addThreadToShutdown:(WhirlyKitLayerThread *_Nonnull)thread;
 
 /// Layers need to send their change requests through here.
 /// You can call this from any thread.
-- (void)addChangeRequest:(WhirlyKit::ChangeRequest *)changeRequest;
+- (void)addChangeRequest:(WhirlyKit::ChangeRequest *_Nullable)changeRequest;
 
 /// Layers should send their change requests through here
 /// You can call this from any thread.

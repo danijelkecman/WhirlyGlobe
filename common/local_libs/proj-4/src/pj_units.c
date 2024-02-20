@@ -30,7 +30,7 @@ pj_units[] = {
 	{NULL,		NULL,			NULL}
 };
 
-struct PJ_UNITS *pj_get_units_ref()
+struct PJ_UNITS *pj_get_units_ref(void)
 
 {
     return pj_units;
