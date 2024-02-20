@@ -2563,6 +2563,8 @@
 		31DDA0A527A4D3B800865ECE /* WhirlyGlobe_iOS.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WhirlyGlobe_iOS.h; sourceTree = "<group>"; };
 		31DDA4B927A8787D00865ECE /* WhirlyGlobe.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WhirlyGlobe.h; sourceTree = "<group>"; };
 		31DDA4CC27AB475F00865ECE /* AtmosphereShadersMTL.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AtmosphereShadersMTL.h; sourceTree = "<group>"; };
+		69139F022B84EFEF00D719CE /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
+		69139F032B84EFF300D719CE /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
 		9547BAE127E480C5004BF3E5 /* MaplyURLSessionManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MaplyURLSessionManager.h; sourceTree = "<group>"; };
 		9547BAE227E480C5004BF3E5 /* MaplyURLSessionManager.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = MaplyURLSessionManager.mm; sourceTree = "<group>"; };
 		9547BAE627E48284004BF3E5 /* MaplyURLSessionManager+Private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "MaplyURLSessionManager+Private.h"; sourceTree = "<group>"; };
@@ -3331,8 +3333,8 @@
 		2B82B5461E82E2490095FB14 /* include */ = {
 			isa = PBXGroup;
 			children = (
-				31DDA0A527A4D3B800865ECE /* WhirlyGlobe_iOS.h */,
 				2B82B5141E82E2490095FB14 /* WhirlyKit */,
+				31DDA0A527A4D3B800865ECE /* WhirlyGlobe_iOS.h */,
 			);
 			name = include;
 			path = ../WhirlyGlobeLib/include;
@@ -3389,8 +3391,6 @@
 		2B82B5C81E82E2490095FB14 /* src */ = {
 			isa = PBXGroup;
 			children = (
-				2BC3D6F7220CAAC700CE91D0 /* WhirlyKitLog.mm */,
-				2B446B2A21F7A4820078A975 /* Platform.mm */,
 				2BC90D6222405DBB00D8B606 /* astronomy */,
 				2BC3D6C02202537D00CE91D0 /* view */,
 				2B82B54D1E82E2490095FB14 /* Cocoa Utils */,
@@ -3402,6 +3402,8 @@
 				2BE7E7B7221B22C200E4EFBA /* loading */,
 				2B82B5C71E82E2490095FB14 /* layers & loaders */,
 				2BA827C2225E580000324594 /* data formats */,
+				2BC3D6F7220CAAC700CE91D0 /* WhirlyKitLog.mm */,
+				2B446B2A21F7A4820078A975 /* Platform.mm */,
 			);
 			name = src;
 			path = ../WhirlyGlobeLib/src;
@@ -3525,6 +3527,12 @@
 		2B84ED111F83FC5A00B34D73 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				69139F022B84EFEF00D719CE /* CoreLocation.framework */,
+				69139F032B84EFF300D719CE /* CoreLocation.framework */,
+				2BE53AC41D249E0600B60FAD /* libz.tbd */,
+				2BE53AC21D249DDE00B60FAD /* libsqlite3.tbd */,
+				2BE53AC01D249DCA00B60FAD /* libc++.tbd */,
+				2BE53ABC1D249DA400B60FAD /* libxml2.tbd */,
 				31AC5BF3286A02F100500A3F /* libz.1.tbd */,
 				31AC5B76286657D400500A3F /* MetalPerformanceShaders.framework */,
 				31AC5B74286657AD00500A3F /* CoreGraphics.framework */,
@@ -3966,11 +3974,6 @@
 		2BE536F51D2499E500B60FAD = {
 			isa = PBXGroup;
 			children = (
-				2BE53AC61D249E1500B60FAD /* CoreLocation.framework */,
-				2BE53AC41D249E0600B60FAD /* libz.tbd */,
-				2BE53AC21D249DDE00B60FAD /* libsqlite3.tbd */,
-				2BE53AC01D249DCA00B60FAD /* libc++.tbd */,
-				2BE53ABC1D249DA400B60FAD /* libxml2.tbd */,
 				2B846EF021F158A500EF2A82 /* common */,
 				2B82B36E1E82E2080095FB14 /* WhirlyGlobeLib */,
 				2BE537011D2499E500B60FAD /* WhirlyGlobeMaplyComponent */,
@@ -3980,6 +3983,7 @@
 				2BE5370D1D2499E500B60FAD /* WhirlyGlobeMaplyComponentTests */,
 				2BE537001D2499E500B60FAD /* Products */,
 				2B84ED111F83FC5A00B34D73 /* Frameworks */,
+				2BE53AC61D249E1500B60FAD /* CoreLocation.framework */,
 			);
 			sourceTree = "<group>";
 		};
@@ -3996,9 +4000,9 @@
 		2BE537011D2499E500B60FAD /* WhirlyGlobeMaplyComponent */ = {
 			isa = PBXGroup;
 			children = (
-				31DDA4B927A8787D00865ECE /* WhirlyGlobe.h */,
 				2BE537191D249A1200B60FAD /* include */,
 				2BE537991D249A1200B60FAD /* src */,
+				31DDA4B927A8787D00865ECE /* WhirlyGlobe.h */,
 				2BE537041D2499E500B60FAD /* Info.plist */,
 			);
 			path = WhirlyGlobeMaplyComponent;
@@ -4287,6 +4291,9 @@
 		2BE53A7E1D249C5800B60FAD /* KissXML */ = {
 			isa = PBXGroup;
 			children = (
+				2BE53A811D249C7400B60FAD /* Private */,
+				2BE53A801D249C6800B60FAD /* Categories */,
+				2BE53A7F1D249C6300B60FAD /* Additions */,
 				2BE53A8C1D249C9000B60FAD /* DDXML.h */,
 				2BE53A8D1D249C9000B60FAD /* DDXMLDocument.h */,
 				2BE53A8E1D249C9000B60FAD /* DDXMLDocument.m */,
@@ -4294,9 +4301,6 @@
 				2BE53A901D249C9000B60FAD /* DDXMLElement.m */,
 				2BE53A911D249C9000B60FAD /* DDXMLNode.h */,
 				2BE53A921D249C9000B60FAD /* DDXMLNode.m */,
-				2BE53A811D249C7400B60FAD /* Private */,
-				2BE53A801D249C6800B60FAD /* Categories */,
-				2BE53A7F1D249C6300B60FAD /* Additions */,
 			);
 			name = KissXML;
 			sourceTree = "<group>";
