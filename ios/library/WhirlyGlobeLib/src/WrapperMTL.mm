@@ -231,20 +231,61 @@ void ResourceRefsMTL::use(id<MTLRenderCommandEncoder> cmdEncode)
 {
     if ([heaps count] == 0 && [buffers count] == 0 && [textures count] == 0)
         return;
-//    int count = 0;
-//    id<MTLResource> all[heaps.size()+buffers.size()+textures.size()];
+
+//  The `MTLRenderStages` enum defines specific stages of the Metal rendering pipeline where resources such as textures and buffers can be used. Each stage represents a point in the graphics processing pipeline where certain operations are performed. Let's break down the meaning of each value:
+//
+//  1. **`MTLRenderStageVertex` (1UL << 0):**
+//     - This stage represents the vertex shader stage of the rendering pipeline. Vertex shaders process individual vertices and are responsible for transforming vertex data (e.g., position, color, texture coordinates) from object space to screen space. Using a resource at this stage means it will be accessible for reading or writing (as specified) by the vertex shader.
+//
+//  2. **`MTLRenderStageFragment` (1UL << 1):**
+//     - The fragment shader stage (sometimes called the pixel shader stage) follows vertex processing. Fragment shaders calculate the color and other attributes of each pixel (or fragment) that will be drawn to the screen. Resources used at this stage are available to the fragment shader for determining the output color, texture sampling, and other per-pixel effects.
+//
+//  3. **`MTLRenderStageTile` API_AVAILABLE(macos(12.0), ios(15.0)) (1UL << 2):**
+//     - Introduced in macOS 12 and iOS 15, this stage is specific to tile-based deferred rendering (TBDR) architectures. It deals with operations on tile memory, which is a fast, on-chip memory area where fragments can be processed before being written out to the framebuffer. Using resources at this stage allows shaders to perform operations on a per-tile basis, which can include tasks like advanced lighting calculations or post-processing effects.
+//
+//  4. **`MTLRenderStageObject` API_AVAILABLE(macos(13.0), ios(16.0)) (1UL << 3):**
+//     - Available from macOS 13 and iOS 16 onwards, this stage relates to processing that involves object shaders. Object shaders are a part of the Metal shading language that allows for more flexible and efficient handling of complex geometries and rendering techniques. Resources used at this stage are available for operations that deal with rendering objects as a whole, rather than at the vertex or fragment level.
+//
+//  5. **`MTLRenderStageMesh` API_AVAILABLE(macos(13.0), ios(16.0)) (1UL << 4):**
+//     - Also introduced in macOS 13 and iOS 16, this stage is specific to mesh shaders. Mesh shaders provide a more flexible vertex processing model that can handle complex geometry on the GPU, allowing for the generation of vertices and primitives on-the-fly. Using resources at this stage means they are accessible to mesh shaders, which can manipulate and generate geometry in sophisticated ways, potentially replacing traditional vertex and geometry shaders.
+//
+//  Each of these stages represents a distinct phase in the rendering pipeline where specific types of processing are performed on graphics data. By specifying the stage(s) at which a resource is used, developers can ensure that the GPU efficiently accesses these resources at the appropriate times, optimizing performance and resource utilization.
+
+//    MTLRenderStageVertex   = (1UL << 0),
+//    MTLRenderStageFragment = (1UL << 1),
+//    MTLRenderStageTile API_AVAILABLE(macos(12.0), ios(15.0)) = (1UL << 2),
+//    MTLRenderStageObject API_AVAILABLE(macos(13.0), ios(16.0))  = (1UL << 3),
+//    MTLRenderStageMesh API_AVAILABLE(macos(13.0), ios(16.0))  = (1UL << 4),
+    MTLRenderStages stages = MTLRenderStageVertex | MTLRenderStageFragment | MTLRenderStageObject;
+
+    // TODO: There's no direct `useHeap:stages:` method - check callers if heaps are included in buffers and textures
+    for (id<MTLBuffer> buff in buffers) {
+        [cmdEncode useResource:buff usage:MTLResourceUsageRead stages:stages];
+    }
     
-    for (id<MTLHeap> heap : heaps)
-        [cmdEncode useHeap:heap];
-    for (id<MTLBuffer> buff : buffers)
-        [cmdEncode useResource:buff usage:MTLResourceUsageRead];
-//        all[count++] = buff;
-    for (id<MTLTexture> tex : textures)
-            [cmdEncode useResource:tex usage:MTLResourceUsageRead];
-//        all[count++] = tex;
-    
-//    [cmdEncode useResources:all count:count usage:MTLResourceUsageRead];
+    for (id<MTLTexture> tex in textures) {
+        [cmdEncode useResource:tex usage:MTLResourceUsageRead stages:stages];
+    }
 }
+
+//void ResourceRefsMTL::use(id<MTLRenderCommandEncoder> cmdEncode)
+//{
+//    if ([heaps count] == 0 && [buffers count] == 0 && [textures count] == 0)
+//        return;
+////    int count = 0;
+////    id<MTLResource> all[heaps.size()+buffers.size()+textures.size()];
+//    
+//    for (id<MTLHeap> heap : heaps)
+//        [cmdEncode useHeap:heap];
+//    for (id<MTLBuffer> buff : buffers)
+//        [cmdEncode useResource:buff usage:MTLResourceUsageRead];
+////        all[count++] = buff;
+//    for (id<MTLTexture> tex : textures)
+//            [cmdEncode useResource:tex usage:MTLResourceUsageRead];
+////        all[count++] = tex;
+//    
+////    [cmdEncode useResources:all count:count usage:MTLResourceUsageRead];
+//}
 
 void ResourceRefsMTL::clear()
 {

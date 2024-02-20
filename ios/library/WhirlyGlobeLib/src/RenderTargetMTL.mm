@@ -125,11 +125,11 @@ RawDataRef RenderTargetMTL::snapshot(int startX,int startY,int snapWidth,int sna
     if (!tex)
         return RawDataRef();
     
-    MTLRegion region = MTLRegionMake2D(startX,startY,snapWidth,snapHeight);
     int pixSize = calcPixelSize([tex pixelFormat]);
     
     NSMutableData *data = [[NSMutableData alloc] initWithLength:snapWidth*snapHeight*pixSize];
 #if !TARGET_OS_SIMULATOR
+    MTLRegion region = MTLRegionMake2D(startX,startY,snapWidth,snapHeight);
     [tex getBytes:[data mutableBytes] bytesPerRow:width*pixSize fromRegion:region mipmapLevel:0];
 #endif
     
@@ -141,11 +141,11 @@ RawDataRef RenderTargetMTL::snapshotMinMax()
     if (!minMaxOutTex)
         return RawDataRef();
     
-    MTLRegion region = MTLRegionMake2D(0,0,2,1);
     int pixSize = calcPixelSize([minMaxOutTex pixelFormat]);
     
     NSMutableData *data = [[NSMutableData alloc] initWithLength:2*1*pixSize];
 #if !TARGET_OS_SIMULATOR
+    MTLRegion region = MTLRegionMake2D(0,0,2,1);
     [minMaxOutTex getBytes:[data mutableBytes] bytesPerRow:2*pixSize fromRegion:region mipmapLevel:0];
 #endif
         

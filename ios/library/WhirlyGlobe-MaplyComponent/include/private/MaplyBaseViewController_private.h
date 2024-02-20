@@ -100,7 +100,7 @@
 - (void) loadSetup_lighting;
 
 /// The base classes fill this in to return their own interaction layer subclass
-- (MaplyBaseInteractionLayer *_Nullable) loadSetup_interactionLayer;
+- (MaplyBaseInteractionLayer *) loadSetup_interactionLayer;
 
 /// Called when starting gesture, animation
 - (void)handleStartMoving:(bool)userMotion;
