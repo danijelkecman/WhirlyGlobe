@@ -89,7 +89,7 @@ C_NAMESPACE_VAR struct PJ_PRIME_MERIDIANS pj_prime_meridians[] = {
     {NULL,        NULL}
 };
 
-struct PJ_PRIME_MERIDIANS *pj_get_prime_meridians_ref()
+struct PJ_PRIME_MERIDIANS *pj_get_prime_meridians_ref(void)
 
 {
     return pj_prime_meridians;

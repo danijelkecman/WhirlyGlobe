@@ -260,8 +260,8 @@ using namespace WhirlyKit;
                         imageData = readStmt2.getBlob();
                 }
             }
-        } catch (int e) {
-            NSLog(@"Exception in [MaplyMBTileSouce imageForTile:]");
+        } catch (NSException *exception) {
+            NSLog(@"Exception in [MaplyMBTileSouce imageForTile:] %@", exception);
         }
     }
     

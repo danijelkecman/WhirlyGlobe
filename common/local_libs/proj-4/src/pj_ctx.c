@@ -94,7 +94,6 @@ projCtx pj_get_default_ctx(void)
 /************************************************************************/
 
 projCtx pj_ctx_alloc(void)
-
 {
     projCtx ctx = (projCtx_t *) malloc(sizeof(projCtx_t));
     memcpy( ctx, pj_get_default_ctx(), sizeof(projCtx_t) );

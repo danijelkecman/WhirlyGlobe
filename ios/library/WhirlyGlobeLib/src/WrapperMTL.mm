@@ -256,23 +256,16 @@ void ResourceRefsMTL::use(id<MTLRenderCommandEncoder> cmdEncode)
 //    MTLRenderStageTile API_AVAILABLE(macos(12.0), ios(15.0)) = (1UL << 2),
 //    MTLRenderStageObject API_AVAILABLE(macos(13.0), ios(16.0))  = (1UL << 3),
 //    MTLRenderStageMesh API_AVAILABLE(macos(13.0), ios(16.0))  = (1UL << 4),
-//    MTLRenderStages stages = MTLRenderStageVertex | MTLRenderStageFragment | MTLRenderStageObject;
-//
-//    // TODO: There's no direct `useHeap:stages:` method - check callers if heaps are included in buffers and textures
-//    for (id<MTLBuffer> buff in buffers) {
-//        [cmdEncode useResource:buff usage:MTLResourceUsageRead stages:stages];
-//    }
-//    
-//    for (id<MTLTexture> tex in textures) {
-//        [cmdEncode useResource:tex usage:MTLResourceUsageRead stages:stages];
-//    }
-  
-      for (id<MTLHeap> heap : heaps)
-          [cmdEncode useHeap:heap];
-      for (id<MTLBuffer> buff : buffers)
-          [cmdEncode useResource:buff usage:MTLResourceUsageRead];
-      for (id<MTLTexture> tex : textures)
-          [cmdEncode useResource:tex usage:MTLResourceUsageRead];
+    MTLRenderStages stages = MTLRenderStageVertex | MTLRenderStageFragment;
+
+    // TODO: There's no direct `useHeap:stages:` method - check callers if heaps are included in buffers and textures
+    for (id<MTLBuffer> buff in buffers) {
+        [cmdEncode useResource:buff usage:MTLResourceUsageRead stages:stages];
+    }
+    
+    for (id<MTLTexture> tex in textures) {
+        [cmdEncode useResource:tex usage:MTLResourceUsageRead stages:stages];
+    }
 }
 
 //void ResourceRefsMTL::use(id<MTLRenderCommandEncoder> cmdEncode)
