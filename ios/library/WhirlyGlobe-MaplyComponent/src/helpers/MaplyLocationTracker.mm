@@ -290,7 +290,7 @@
 - (void) setupLocationManager {
     if (_locationManager)
         return;
-    const CLAuthorizationStatus authStatus = [CLLocationManager authorizationStatus];
+    const CLAuthorizationStatus authStatus = _locationManager.authorizationStatus;
     if (authStatus == kCLAuthorizationStatusRestricted || authStatus == kCLAuthorizationStatusDenied) {
         return;
     }
@@ -324,7 +324,20 @@
 }
 
 - (void)orientationChanged:(NSNotification *)notification {
-    const auto orientation = [[UIApplication sharedApplication] statusBarOrientation];
+    UIWindowScene *windowScene = nil;
+    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+        if (scene.activationState == UISceneActivationStateForegroundActive) {
+            windowScene = (UIWindowScene *)scene;
+            break;
+        }
+    }
+    
+    if (!windowScene) {
+        return; // No active window scene found
+    }
+
+    UIInterfaceOrientation orientation = windowScene.interfaceOrientation;
+
     switch (orientation) {
         case UIInterfaceOrientationPortrait:
             _locationManager.headingOrientation = CLDeviceOrientationPortrait;
@@ -342,7 +355,6 @@
             _locationManager.headingOrientation = CLDeviceOrientationPortrait;
             break;
     }
-    
 }
 
 - (void) teardownLocationManager {
@@ -585,9 +597,13 @@
     [delegate locationManager:manager didFailWithError:error];
 }
 
-- (void) locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status {
+- (void)locationManagerDidChangeAuthorization:(CLLocationManager *)manager {
+    CLAuthorizationStatus status = manager.authorizationStatus;
+
     __strong NSObject<MaplyLocationTrackerDelegate> *delegate = _delegate;
-    [delegate locationManager:manager didChangeAuthorizationStatus:status];
+    if ([delegate respondsToSelector:@selector(locationManager:didChangeAuthorizationStatus:)]) {
+        [delegate locationManager:manager didChangeAuthorizationStatus:status];
+    }
 
     switch (status) {
         case kCLAuthorizationStatusNotDetermined:
@@ -598,9 +614,9 @@
             break;
         case kCLAuthorizationStatusAuthorizedWhenInUse:
         case kCLAuthorizationStatusAuthorizedAlways:
-            [_locationManager startUpdatingLocation];
+            [manager startUpdatingLocation];
             if (_useHeading)
-                [_locationManager startUpdatingHeading];
+                [manager startUpdatingHeading];
             break;
     }
 }
