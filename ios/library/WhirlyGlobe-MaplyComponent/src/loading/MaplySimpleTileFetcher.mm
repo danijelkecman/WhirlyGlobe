@@ -203,6 +203,7 @@ typedef std::map<MaplyTileFetchRequest *,TileInfoRef> TileFetchMap;
 {
     // Done with the tile, so take it out of here
     toLoad.erase(tile);
+    toLoad.erase(tile);
     auto rit = tilesByFetchRequest.find(tile->request);
     if (rit != tilesByFetchRequest.end())
         tilesByFetchRequest.erase(rit);
