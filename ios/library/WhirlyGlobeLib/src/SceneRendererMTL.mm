@@ -78,7 +78,7 @@ SceneRendererMTL::SceneRendererMTL(id<MTLDevice> mtlDevice,id<MTLLibrary> mtlLib
     indirectRender = false;
 #if !TARGET_OS_MACCATALYST
     if (@available(iOS 13.0, *)) {
-        if ([mtlDevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily3_v4])
+        if ([mtlDevice supportsFamily:MTLGPUFamilyMetal3])
             indirectRender = true;
     }
 #endif
