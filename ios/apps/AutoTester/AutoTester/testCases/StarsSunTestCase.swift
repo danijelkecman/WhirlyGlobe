@@ -124,7 +124,6 @@ class StarsSunTestCase: MaplyTestCase {
             maxZoom: sampleParams.maxZoom)
         tileSource1.cacheDir = "\(cacheDir)/daytexture-\(dateStr)/"
 
-        // TODO: Get the loader to respect missing tiles at the lowest levels
         let nightDateStr = "2015-07-01";
         let nightUrl = "http://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/\(nightDateStr)/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg"
 		let tileSource2 = MaplyRemoteTileInfoNew(baseURL: nightUrl, minZoom: 1, maxZoom: 8)

@@ -491,7 +491,6 @@ public class MapboxKindaMap {
                 self.stop()
                 return
             }
-            // TODO: Doesn't handle more than one local source
             if !localFetchers.isEmpty {
                 imageLoader.setTileFetcher(localFetchers[0])
             }
@@ -598,7 +597,6 @@ public class MapboxKindaMap {
 
             if !(viewC is WhirlyGlobeViewController) {
                 // Set the background clear to the color at level 0
-                // TODO: Make this change by level
                 if let color = styleSheetVector.backgroundColor(forZoom: 0.0) {
                     viewC.clearColor = color
                 }
