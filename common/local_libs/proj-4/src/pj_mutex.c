@@ -65,7 +65,7 @@
 /*      Acquire the PROJ.4 lock.                                        */
 /************************************************************************/
 
-void pj_acquire_lock()
+void pj_acquire_lock(void)
 {
 }
 
@@ -75,14 +75,14 @@ void pj_acquire_lock()
 /*      Release the PROJ.4 lock.                                        */
 /************************************************************************/
 
-void pj_release_lock()
+void pj_release_lock(void)
 {
 }
 
 /************************************************************************/
 /*                          pj_cleanup_lock()                           */
 /************************************************************************/
-void pj_cleanup_lock()
+void pj_cleanup_lock(void)
 {
 }
 

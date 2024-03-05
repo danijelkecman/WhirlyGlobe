@@ -21,6 +21,7 @@
 #import <string>
 #import <memory>
 #import "WhirlyTypes.h"
+#import <functional>
 
 namespace WhirlyKit
 {

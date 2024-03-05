@@ -223,7 +223,7 @@ using namespace WhirlyKit;
         userID = [[NSUUID UUID] UUIDString];
         [userDefaults setObject:userID forKey:@"wgmaplyanalyticuser"];
 
-        [self sendAnalytics:@"analytics.mousebirdconsulting.com:8081"];
+//        [self sendAnalytics:@"analytics.mousebirdconsulting.com:8081"];
     }
 }
 

@@ -30,6 +30,6 @@
 
 @end
 
-void DDXMLDummyFunc()
+void DDXMLDummyFunc(void)
 {
 }

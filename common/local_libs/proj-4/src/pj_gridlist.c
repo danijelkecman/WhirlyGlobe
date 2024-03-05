@@ -51,7 +51,7 @@ static PJ_GRIDINFO *grid_list = NULL;
 /*      Deallocate all loaded grids.                                    */
 /************************************************************************/
 
-void pj_deallocate_grids()
+void pj_deallocate_grids(void)
 
 {
     while( grid_list != NULL )

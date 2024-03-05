@@ -69,7 +69,7 @@ paralist *pj_clone_paralist( const paralist *list)
 /*      Clear out all memory held in the init file cache.               */
 /************************************************************************/
 
-void pj_clear_initcache()
+void pj_clear_initcache(void)
 {
     if( cache_alloc > 0 )
     {

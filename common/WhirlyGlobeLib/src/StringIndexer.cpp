@@ -26,35 +26,35 @@ StringIndexer StringIndexer::instance;
 
 StringIndexer::StringIndexer() : stringToIdent(500)
 {
-    identToString.reserve(500);
+  identToString.reserve(500);
 }
 
 StringIdentity StringIndexer::getStringID(const std::string &str)
 {
-    StringIndexer &index = getInstance();
-
-    // todo: upgradeable shared mutex would be perfect here
-    std::lock_guard<std::mutex> lock(index.mutex);
-
-    const auto it = index.stringToIdent.find(str);
-    if (it != index.stringToIdent.end())
-        return it->second;
-
-    const int strID = index.identToString.size();
-    index.identToString.push_back(str);
-    index.stringToIdent[str] = strID;
-    return strID;
+  StringIndexer &index = getInstance();
+  
+  // todo: upgradeable shared mutex would be perfect here
+  std::lock_guard<std::mutex> lock(index.mutex);
+  
+  const auto it = index.stringToIdent.find(str);
+  if (it != index.stringToIdent.end())
+    return it->second;
+  
+  const int strID = index.identToString.size();
+  index.identToString.push_back(str);
+  index.stringToIdent[str] = strID;
+  return strID;
 }
 
 std::string StringIndexer::getString(StringIdentity strID)
 {
-    const StringIndexer &index = getInstance();
-
-    std::lock_guard<std::mutex> lock(index.mutex);
-
-    return (strID < index.identToString.size()) ? index.identToString[strID] : std::string();
+  const StringIndexer &index = getInstance();
+  
+  std::lock_guard<std::mutex> lock(index.mutex);
+  
+  return (strID < index.identToString.size()) ? index.identToString[strID] : std::string();
 }
- 
+
 // Note: This is from OpenGL.  Doesn't hold anymore on iOS
 #define WhirlyKitMaxTextures 8
 
@@ -119,86 +119,91 @@ StringIdentity a_modelDirNameID;
 // Turn the string names into IDs, but just once
 static void SetupDrawableStringsOnce()
 {
-    for (unsigned int ii=0;ii<8;ii++) {
-        std::string baseMapName = "s_baseMap" + std::to_string(ii);
-        baseMapNameIDs[ii] = StringIndexer::getStringID(baseMapName);
-        std::string hasBaseMapName = "u_has_baseMap" + std::to_string(ii);
-        hasBaseMapNameIDs[ii] = StringIndexer::getStringID(hasBaseMapName);
-        std::string texOffsetName = "u_texOffset" + std::to_string(ii);
-        texOffsetNameIDs[ii] = StringIndexer::getStringID(texOffsetName);
-        std::string texScaleName = "u_texScale" + std::to_string(ii);
-        texScaleNameIDs[ii] = StringIndexer::getStringID(texScaleName);
-    }
-    char name[200];
-    for (unsigned int index=0;index<8;index++) {
-        sprintf(name,"light[%d].viewdepend",index);
-        lightViewDependNameIDs[index] = StringIndexer::getStringID(name);
-        sprintf(name,"light[%d].direction",index);
-        lightDirectionNameIDs[index] = StringIndexer::getStringID(name);
-        sprintf(name,"light[%d].halfplane",index);
-        lightHalfplaneNameIDs[index] = StringIndexer::getStringID(name);
-        sprintf(name,"light[%d].ambient",index);
-        lightAmbientNameIDs[index] = StringIndexer::getStringID(name);
-        sprintf(name,"light[%d].diffuse",index);
-        lightDiffuseNameIDs[index] = StringIndexer::getStringID(name);
-        sprintf(name,"light[%d].specular",index);
-        lightSpecularNameIDs[index] = StringIndexer::getStringID(name);
-    }
-    u_numLightsNameID = StringIndexer::getStringID("u_numLights");
-    materialAmbientNameID = StringIndexer::getStringID("material.ambient");
-    materialDiffuseNameID = StringIndexer::getStringID("material.diffuse");
-    materialSpecularNameID = StringIndexer::getStringID("material.specular");
-    materialSpecularExponentNameID = StringIndexer::getStringID("material.specular_exponent");
-
-    mvpMatrixNameID = StringIndexer::getStringID("u_mvpMatrix");
-    mvpInvMatrixNameID = StringIndexer::getStringID("u_mvpInvMatrix");
-    mvMatrixNameID = StringIndexer::getStringID("u_mvMatrix");
-    mvNormalMatrixNameID = StringIndexer::getStringID("u_mvNormalMatrix");
-    mvpNormalMatrixNameID = StringIndexer::getStringID("u_mvpNormalMatrix");
-    u_FadeNameID = StringIndexer::getStringID("u_fade");
-    u_pMatrixNameID = StringIndexer::getStringID("u_pMatrix");
-    u_ScaleNameID = StringIndexer::getStringID("u_scale");
-    u_HasTextureNameID = StringIndexer::getStringID("u_hasTexture");
-    a_SingleMatrixNameID = StringIndexer::getStringID("a_singleMatrix");
-    a_PositionNameID = StringIndexer::getStringID("a_position");
-    u_EyeVecNameID = StringIndexer::getStringID("u_eyeVec");
-    u_EyePosNameID = StringIndexer::getStringID("u_eyePos");
-    u_SizeNameID = StringIndexer::getStringID("u_size");
-    u_TimeNameID = StringIndexer::getStringID("u_time");
-    u_lifetimeNameID = StringIndexer::getStringID("u_lifetime");
-    u_pixDispSizeNameID = StringIndexer::getStringID("u_pixDispSize");
-    u_frameLenID = StringIndexer::getStringID("u_frameLen");
-    a_offsetNameID = StringIndexer::getStringID("a_offset");
-    u_uprightNameID = StringIndexer::getStringID("u_upright");
-    u_activerotNameID = StringIndexer::getStringID("u_activerot");
-    a_rotNameID = StringIndexer::getStringID("a_rot");
-    a_dirNameID = StringIndexer::getStringID("a_dir");
-    a_maskNameID = StringIndexer::getStringID("a_maskID");
-    for (unsigned int index=0;index<WhirlyKitMaxMasks;index++) {
-        sprintf(name,"a_maskID%d",index);
-        a_maskNameIDs[index] = StringIndexer::getStringID(name);
-    }
-    a_texCoordNameID = StringIndexer::getStringID("a_texCoord");
-    u_w2NameID = StringIndexer::getStringID("u_w2");
-    u_Realw2NameID = StringIndexer::getStringID("u_real_w2");
-    u_wideOffsetNameID = StringIndexer::getStringID("u_wideOffset");
-    u_EdgeNameID = StringIndexer::getStringID("u_edge");
-    u_texScaleNameID = StringIndexer::getStringID("u_texScale");
-    u_colorNameID = StringIndexer::getStringID("u_color");
-    u_lengthNameID = StringIndexer::getStringID("u_length");
-    u_interpNameID = StringIndexer::getStringID("u_interp");
-    u_screenOriginNameID = StringIndexer::getStringID("u_screenOrigin");
-    a_colorNameID = StringIndexer::getStringID("a_color");
-    a_normalNameID = StringIndexer::getStringID("a_normal");
-    a_modelCenterNameID = StringIndexer::getStringID("a_modelCenter");
-    a_useInstanceColorNameID = StringIndexer::getStringID("a_useInstanceColor");
-    a_instanceColorNameID = StringIndexer::getStringID("a_instanceColor");
-    a_modelDirNameID = StringIndexer::getStringID("a_modelDir");
+  for (unsigned int ii=0;ii<8;ii++) {
+    std::string baseMapName = "s_baseMap" + std::to_string(ii);
+    baseMapNameIDs[ii] = StringIndexer::getStringID(baseMapName);
+    std::string hasBaseMapName = "u_has_baseMap" + std::to_string(ii);
+    hasBaseMapNameIDs[ii] = StringIndexer::getStringID(hasBaseMapName);
+    std::string texOffsetName = "u_texOffset" + std::to_string(ii);
+    texOffsetNameIDs[ii] = StringIndexer::getStringID(texOffsetName);
+    std::string texScaleName = "u_texScale" + std::to_string(ii);
+    texScaleNameIDs[ii] = StringIndexer::getStringID(texScaleName);
+  }
+  char name[200];
+  for (unsigned int index = 0; index < 8; index++) {
+    snprintf(name, sizeof(name), "light[%d].viewdepend", index);
+    lightViewDependNameIDs[index] = StringIndexer::getStringID(name);
+    
+    snprintf(name, sizeof(name), "light[%d].direction", index);
+    lightDirectionNameIDs[index] = StringIndexer::getStringID(name);
+    
+    snprintf(name, sizeof(name), "light[%d].halfplane", index);
+    lightHalfplaneNameIDs[index] = StringIndexer::getStringID(name);
+    
+    snprintf(name, sizeof(name), "light[%d].ambient", index);
+    lightAmbientNameIDs[index] = StringIndexer::getStringID(name);
+    
+    snprintf(name, sizeof(name), "light[%d].diffuse", index);
+    lightDiffuseNameIDs[index] = StringIndexer::getStringID(name);
+    
+    snprintf(name, sizeof(name), "light[%d].specular", index);
+    lightSpecularNameIDs[index] = StringIndexer::getStringID(name);
+  }
+  u_numLightsNameID = StringIndexer::getStringID("u_numLights");
+  materialAmbientNameID = StringIndexer::getStringID("material.ambient");
+  materialDiffuseNameID = StringIndexer::getStringID("material.diffuse");
+  materialSpecularNameID = StringIndexer::getStringID("material.specular");
+  materialSpecularExponentNameID = StringIndexer::getStringID("material.specular_exponent");
+  
+  mvpMatrixNameID = StringIndexer::getStringID("u_mvpMatrix");
+  mvpInvMatrixNameID = StringIndexer::getStringID("u_mvpInvMatrix");
+  mvMatrixNameID = StringIndexer::getStringID("u_mvMatrix");
+  mvNormalMatrixNameID = StringIndexer::getStringID("u_mvNormalMatrix");
+  mvpNormalMatrixNameID = StringIndexer::getStringID("u_mvpNormalMatrix");
+  u_FadeNameID = StringIndexer::getStringID("u_fade");
+  u_pMatrixNameID = StringIndexer::getStringID("u_pMatrix");
+  u_ScaleNameID = StringIndexer::getStringID("u_scale");
+  u_HasTextureNameID = StringIndexer::getStringID("u_hasTexture");
+  a_SingleMatrixNameID = StringIndexer::getStringID("a_singleMatrix");
+  a_PositionNameID = StringIndexer::getStringID("a_position");
+  u_EyeVecNameID = StringIndexer::getStringID("u_eyeVec");
+  u_EyePosNameID = StringIndexer::getStringID("u_eyePos");
+  u_SizeNameID = StringIndexer::getStringID("u_size");
+  u_TimeNameID = StringIndexer::getStringID("u_time");
+  u_lifetimeNameID = StringIndexer::getStringID("u_lifetime");
+  u_pixDispSizeNameID = StringIndexer::getStringID("u_pixDispSize");
+  u_frameLenID = StringIndexer::getStringID("u_frameLen");
+  a_offsetNameID = StringIndexer::getStringID("a_offset");
+  u_uprightNameID = StringIndexer::getStringID("u_upright");
+  u_activerotNameID = StringIndexer::getStringID("u_activerot");
+  a_rotNameID = StringIndexer::getStringID("a_rot");
+  a_dirNameID = StringIndexer::getStringID("a_dir");
+  a_maskNameID = StringIndexer::getStringID("a_maskID");
+  for (unsigned int index = 0; index < WhirlyKitMaxMasks; index++) {
+      snprintf(name, sizeof(name), "a_maskID%d", index);
+      a_maskNameIDs[index] = StringIndexer::getStringID(name);
+  }
+  a_texCoordNameID = StringIndexer::getStringID("a_texCoord");
+  u_w2NameID = StringIndexer::getStringID("u_w2");
+  u_Realw2NameID = StringIndexer::getStringID("u_real_w2");
+  u_wideOffsetNameID = StringIndexer::getStringID("u_wideOffset");
+  u_EdgeNameID = StringIndexer::getStringID("u_edge");
+  u_texScaleNameID = StringIndexer::getStringID("u_texScale");
+  u_colorNameID = StringIndexer::getStringID("u_color");
+  u_lengthNameID = StringIndexer::getStringID("u_length");
+  u_interpNameID = StringIndexer::getStringID("u_interp");
+  u_screenOriginNameID = StringIndexer::getStringID("u_screenOrigin");
+  a_colorNameID = StringIndexer::getStringID("a_color");
+  a_normalNameID = StringIndexer::getStringID("a_normal");
+  a_modelCenterNameID = StringIndexer::getStringID("a_modelCenter");
+  a_useInstanceColorNameID = StringIndexer::getStringID("a_useInstanceColor");
+  a_instanceColorNameID = StringIndexer::getStringID("a_instanceColor");
+  a_modelDirNameID = StringIndexer::getStringID("a_modelDir");
 }
 static std::once_flag stringsSetup;
 void SetupDrawableStrings()
 {
-    std::call_once(stringsSetup, SetupDrawableStringsOnce);
+  std::call_once(stringsSetup, SetupDrawableStringsOnce);
 }
 
 }

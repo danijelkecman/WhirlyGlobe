@@ -122,6 +122,6 @@
 
 @end
 
-void NSDictionaryDummyFunc()
+void NSDictionaryDummyFunc(void)
 {    
 }
