@@ -17,17 +17,19 @@
  */
 
 #import "QuadDisplayControllerNew.h"
+#import "WhirlyKitLog.h"
+
 
 namespace WhirlyKit
 {
     
 QuadDisplayControllerNew::QuadDisplayControllerNew(QuadDataStructure *dataStructure,QuadLoaderNew *loader,SceneRenderer *renderer) :
+    QuadTreeNew(dataStructure->getTotalExtents(),
+                dataStructure->getMinZoom(),
+                dataStructure->getMaxZoom()),
     dataStructure(dataStructure),
     loader(loader),
-    renderer(renderer),
-    QuadTreeNew(MbrD(dataStructure->getTotalExtents()),
-                dataStructure->getMinZoom(),
-                dataStructure->getMaxZoom())
+    renderer(renderer)
 {
     mbr = dataStructure->getValidExtents();
     coordSys = dataStructure->getCoordSystem();
@@ -257,7 +259,7 @@ bool QuadDisplayControllerNew::viewUpdate(PlatformThreadInfo *threadInfo,const V
         {
             toAdd.insert(node);
         }
-        else
+        else    // todo: test whether the importance value actually changed?
         {
             toUpdate.insert(node);
         }

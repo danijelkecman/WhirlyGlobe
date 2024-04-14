@@ -17,13 +17,17 @@
  */
 
 #import "control/MaplyRenderController.h"
-#import "MaplyComponentObject_private.h"
 #import "MaplyBaseInteractionLayer_private.h"
-#import "MaplyVectorObject_private.h"
 #import "MaplyShader_private.h"
 #import "MaplyCoordinateSystem_private.h"
 #import "MaplyQuadSampler_private.h"
 #import "ProgramMTL.h"
+
+#if !MAPLY_MINIMAL
+# import "MaplyComponentObject_private.h"
+# import "MaplyVectorObject_private.h"
+#endif //!MAPLY_MINIMAL
+
 
 @class MaplyBaseInteractionLayer;
 
@@ -69,7 +73,9 @@
     NSThread * __weak mainThread;
     
     WhirlyKitLayerThread *baseLayerThread;
+#if !MAPLY_MINIMAL
     WhirlyKitLayoutLayer *layoutLayer;
+#endif //!MAPLY_MINIMAL
     NSMutableArray *layerThreads;
 
     // Layers (and associated data) created for the user
@@ -78,12 +84,14 @@
     /// Active models
     NSMutableArray *activeObjects;
     
+#if !MAPLY_MINIMAL
     /// The default cluster generator (group 0)
     MaplyBasicClusterGenerator *defaultClusterGenerator;
     
     /// Used to render font glyphs on this platform
     WhirlyKit::FontTextureManager_iOSRef fontTexManager;
-    
+#endif //!MAPLY_MINIMAL
+
     /// Current draw priority if we're assigning them ourselves
     int layerDrawPriority;
 
@@ -96,9 +104,6 @@
     // Used for masking features against each other
     MaplyTexture *maskTex;
     MaplyRenderTarget *maskRenderTarget;
-
-    /// Number of simultaneous tile fetcher connections (per tile fetcher)
-    int tileFetcherConnections;
 }
 
 - (int)screenObjectDrawPriorityOffset;
@@ -116,18 +121,24 @@
 
 /// Look for a sampling layer that matches the given parameters
 /// We'll also keep it around until the user lets us know we're done
-- (MaplyQuadSamplingLayer *)findSamplingLayer:(const WhirlyKit::SamplingParams &)params forUser:(WhirlyKit::QuadTileBuilderDelegateRef)userObj;
+- (MaplyQuadSamplingLayer * _Nullable)findSamplingLayer:(const WhirlyKit::SamplingParams &)params forUser:(WhirlyKit::QuadTileBuilderDelegateRef)userObj;
 
 /// The given user object is done with the given sampling layer.  So we may shut it down.
-- (void)releaseSamplingLayer:(MaplyQuadSamplingLayer *)layer forUser:(WhirlyKit::QuadTileBuilderDelegateRef)userObj;
+- (void)releaseSamplingLayer:(MaplyQuadSamplingLayer * _Nonnull)layer forUser:(WhirlyKit::QuadTileBuilderDelegateRef)userObj;
 
 // Used for setup by the view controllers
-- (void)loadSetup_scene:(MaplyBaseInteractionLayer *)newInteractLayer;
+- (void)loadSetup_scene:(MaplyBaseInteractionLayer * _Nonnull)newInteractLayer;
 - (void)loadSetup_view:(WhirlyKit::ViewRef)view;
 
 // Version of remove objects that takes raw IDs
 - (void)removeObjectsByID:(const WhirlyKit::SimpleIDSet &)compObjIDs mode:(MaplyThreadMode)threadMode;
 
-- (void)addShader:(NSString *)inName program:(WhirlyKit::ProgramRef)program;
+- (void)addShader:(NSString * _Nonnull)inName program:(WhirlyKit::ProgramRef)program;
+
+- (MaplyComponentObject * _Nullable)addShapes:(NSArray * _Nonnull)shapes info:(WhirlyKit::ShapeInfo &)shapeInfo desc:(NSDictionary* _Nullable)desc mode:(MaplyThreadMode)threadMode;
+
+- (void)report:(NSString * __nonnull)tag error:(NSError * __nonnull)error;
+- (void)report:(NSString * __nonnull)tag exception:(NSException * __nonnull)error;
 
 @end
+

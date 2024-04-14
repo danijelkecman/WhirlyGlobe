@@ -2,7 +2,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 2/1/11.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,12 +27,12 @@ using namespace Eigen;
 
 namespace WhirlyKit
 {
-    
+
 BasicDrawable::Triangle::Triangle(unsigned short v0,unsigned short v1,unsigned short v2)
 {
     verts[0] = v0;  verts[1] = v1;  verts[2] = v2;
 }
-    
+
 BasicDrawable::BasicDrawable(const std::string &name) :
     Drawable(name),
     motion(false)
@@ -41,11 +41,15 @@ BasicDrawable::BasicDrawable(const std::string &name) :
 
 BasicDrawable::~BasicDrawable()
 {
-    for (auto & vertexAttribute : vertexAttributes)
+    try
     {
-        delete vertexAttribute;
+        for (auto & vertexAttribute : vertexAttributes)
+        {
+            delete vertexAttribute;
+        }
+        vertexAttributes.clear();
     }
-    vertexAttributes.clear();
+    WK_STD_DTOR_CATCH()
 }
 
 void BasicDrawable::setTexRelative(int which,int size,int borderTexel,int relLevel,int relX,int relY)
@@ -600,10 +604,12 @@ void OnOffChangeRequest::execute2(Scene *scene,SceneRenderer *renderer,DrawableR
     {
         basicDrawInst->setEnable(newOnOff);
     }
+#if !MAPLY_MINIMAL
     else if (auto partSys = dynamic_cast<ParticleSystemDrawable*>(draw.get()))
     {
         partSys->setOnOff(newOnOff);
     }
+#endif //!MAPLY_MINIMAL
 }
 
 VisibilityChangeRequest::VisibilityChangeRequest(SimpleIdentity drawId,float minVis,float maxVis)
@@ -645,10 +651,7 @@ void FadeChangeRequest::execute2(Scene *scene,SceneRenderer *renderer,DrawableRe
 DrawTexChangeRequest::DrawTexChangeRequest(SimpleIdentity drawId,unsigned int which,SimpleIdentity newTexId) :
     DrawableChangeRequest(drawId),
     which(which),
-    newTexId(newTexId),
-    relSet(false), relLevel(0),
-    relX(0), relY(0),
-    borderTexel(0), size(0)
+    newTexId(newTexId)
 {
 }
 
@@ -812,11 +815,13 @@ void RenderTargetChangeRequest::execute2(Scene *scene,SceneRenderer *renderer,Dr
         BasicDrawableInstanceRef basicDrawInst = std::dynamic_pointer_cast<BasicDrawableInstance>(draw);
         if (basicDrawInst)
             basicDrawInst->setRenderTarget(targetID);
+#if !MAPLY_MINIMAL
         else {
             ParticleSystemDrawableRef partDrawable = std::dynamic_pointer_cast<ParticleSystemDrawable>(draw);
             if (partDrawable)
                 partDrawable->setRenderTarget(targetID);
         }
+#endif //!MAPLY_MINIMAL
     }
     
     renderer->addDrawable(draw);
@@ -838,11 +843,13 @@ void UniformBlockSetRequest::execute2(Scene *scene,SceneRenderer *renderer,Drawa
         BasicDrawableInstanceRef basicDrawInst = std::dynamic_pointer_cast<BasicDrawableInstance>(draw);
         if (basicDrawInst)
             basicDrawInst->setUniBlock(uniBlock);
+#if !MAPLY_MINIMAL
         else {
             ParticleSystemDrawableRef partDrawable = std::dynamic_pointer_cast<ParticleSystemDrawable>(draw);
             if (partDrawable)
                 partDrawable->setUniBlock(uniBlock);
         }
+#endif //!MAPLY_MINIMAL
     }
 }
 

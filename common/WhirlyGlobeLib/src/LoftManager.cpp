@@ -2,7 +2,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 7/30/13.
- *  Copyright 2011-2022 mousebird consulting.
+ *  Copyright 2011-2023 mousebird consulting.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #import "Tesselator.h"
 #import "BaseInfo.h"
 #import "SharedAttributes.h"
+#import "WhirlyKitLog.h"
 
 using namespace Eigen;
 using namespace WhirlyKit;
@@ -31,11 +32,6 @@ namespace WhirlyKit
     
     
 LoftedPolyInfo::LoftedPolyInfo()
-    : height(0.01), base(0.0), top(true), side(true), layered(false),
-    outline(true), outlineSide(false), outlineBottom(false),
-    outlineDrawPriority(MaplyLoftedPolysDrawPriorityDefault+1),
-    color(255,255,255,255), outlineColor(255,255,255,255), outlineWidth(1.0),
-    centered(false), hasCenter(false), center(0.0,0.0), gridSize(10.0 / 180.0 * M_PI)
 {
     zBufferRead = true;
     zBufferWrite = false;
@@ -49,13 +45,13 @@ LoftedPolyInfo::LoftedPolyInfo(const Dictionary &dict)
     zBufferWrite = dict.getBool(MaplyZBufferWrite, false);
 
     color = dict.getColor(MaplyColor, RGBAColor(255,255,255,255));
-    height = dict.getDouble(MaplyLoftedPolyHeight, 0.01);
-    base = dict.getDouble(MaplyLoftedPolyBase, 0.0);
+    height = (float)dict.getDouble(MaplyLoftedPolyHeight, 0.01);
+    base = (float)dict.getDouble(MaplyLoftedPolyBase, 0.0);
     top = dict.getBool(MaplyLoftedPolyTop, true);
     side = dict.getBool(MaplyLoftedPolySide, true);
     outline = dict.getBool(MaplyLoftedPolyOutline, true);
     outlineColor = dict.getColor(MaplyLoftedPolyOutlineColor, RGBAColor(255,255,255,255));
-    outlineWidth = dict.getDouble(MaplyLoftedPolyOutlineWidth, 1.0);
+    outlineWidth = (float)dict.getDouble(MaplyLoftedPolyOutlineWidth, 1.0);
     outlineDrawPriority = dict.getInt(MaplyLoftedPolyOutlineDrawPriority,drawPriority+1);
     outlineSide = dict.getBool(MaplyLoftedPolyOutlineSide,false);
     outlineBottom = dict.getBool(MaplyLoftedPolyOutlineBottom,false);
@@ -66,7 +62,7 @@ LoftedPolyInfo::LoftedPolyInfo(const Dictionary &dict)
         center.x() = dict.getDouble(MaplyVecCenterX,0.0);
         center.y() = dict.getDouble(MaplyVecCenterY,0.0);
     }
-    // 10 degress by default
+    // 10 degrees by default
     gridSize = dict.getDouble(MaplyLoftedPolyGridSize,10.0 / 180.0 * M_PI);
 }
 
@@ -74,12 +70,17 @@ LoftedPolyInfo::LoftedPolyInfo(const Dictionary &dict)
  Used to construct drawables with multiple shapes in them.
  Eventually, will move this out to be a more generic object.
  */
-class DrawableBuilder2
+struct DrawableBuilder2
 {
-public:
-    DrawableBuilder2(Scene *scene,SceneRenderer *sceneRender,ChangeSet &changes,LoftedPolySceneRep *sceneRep,
-                     const LoftedPolyInfo &polyInfo,GeometryType primType,const GeoMbr &inDrawMbr)
-    : scene(scene), sceneRender(sceneRender), sceneRep(sceneRep), polyInfo(polyInfo), drawable(NULL), primType(primType), changes(changes), centerValid(false), center(0,0,0), geoCenter(0,0)
+    DrawableBuilder2(Scene *scene,SceneRenderer *sceneRender,ChangeSet &changes,
+                     LoftedPolySceneRep *sceneRep, const LoftedPolyInfo &polyInfo,
+                     GeometryType primType,const GeoMbr &inDrawMbr) :
+         scene(scene),
+         sceneRender(sceneRender),
+         sceneRep(sceneRep),
+         changes(changes),
+         polyInfo(polyInfo),
+         primType(primType)
     {
         drawMbr = inDrawMbr;
     }
@@ -367,7 +368,7 @@ public:
                 sceneRep->drawIDs.insert(drawable->getDrawableID());
                 changes.push_back(new AddDrawableReq(drawable->getDrawable()));
             }
-            drawable = NULL;
+            drawable = nullptr;
         }
     }
     
@@ -380,26 +381,27 @@ protected:
     BasicDrawableBuilderRef drawable;
     const LoftedPolyInfo &polyInfo;
     GeometryType primType;
-    Point3d center;
-    Point2d geoCenter;
-    bool applyCenter;
-    bool centerValid;
+    Point3d center = { 0, 0, 0 };
+    Point2d geoCenter = { 0, 0 };
+    bool applyCenter = false;
+    bool centerValid = false;
 };
-    
-    
-LoftManager::LoftManager()
-{
-}
+
 LoftManager::~LoftManager()
 {
-    std::lock_guard<std::mutex> guardLock(lock);
-
-    for (LoftedPolySceneRepSet::iterator it = loftReps.begin();
-         it != loftReps.end(); ++it)
-        delete *it;
-    loftReps.clear();
+    try
+    {
+        std::lock_guard<std::mutex> guardLock(lock);
+        
+        for (auto loftRep : loftReps)
+        {
+            delete loftRep;
+        }
+        loftReps.clear();
+    }
+    WK_STD_DTOR_CATCH()
 }
-    
+
 // From a scene rep and a description, add the given polygons to the drawable builder
 void LoftManager::addGeometryToBuilder(LoftedPolySceneRep *sceneRep,const LoftedPolyInfo &polyInfo,GeoMbr &drawMbr,Point3d &center,bool centerValid,Point2d &geoCenter,ShapeSet &shapes, VectorTrianglesRef triMesh,std::vector<WhirlyKit::VectorRing> &outlines,ChangeSet &changes)
 {
@@ -463,7 +465,7 @@ SimpleIdentity LoftManager::addLoftedPolys(WhirlyKit::ShapeSet *shapes,const Lof
     SimpleIdentity loftID = EmptyIdentity;
 
     CoordSystemDisplayAdapter *coordAdapter = scene->getCoordAdapter();
-    CoordSystem *coordSys = coordAdapter->getCoordSystem();
+    const CoordSystem *coordSys = coordAdapter->getCoordSystem();
     LoftedPolySceneRep *sceneRep = new LoftedPolySceneRep();
     loftID = sceneRep->getId();
     sceneRep->fadeOut = polyInfo.fadeOut;

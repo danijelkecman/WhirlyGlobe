@@ -46,6 +46,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -308,6 +309,10 @@ public abstract class BaseController implements RenderController.TaskManager, Re
 		 * Super special option.  You probably don't need that.
 		 */
 		public String loadLibraryName = null;
+		/**
+		 * Set to false to turn off gestures
+		 */
+		public boolean enableGestures = true;
 	}
 
 	// Set if we're using a TextureView rather than a SurfaceView
@@ -341,7 +346,21 @@ public abstract class BaseController implements RenderController.TaskManager, Re
 	/**
 	 * Load in the shared C++ library if needed.
 	 */
-	String loadLibraryName = "whirlyglobemaply";
+	private static final String defaultLibName = "whirlyglobemaply";
+	String loadLibraryName = defaultLibName;
+
+	/**
+	 * Call this to enable use of JNI-based classes before creating a controller.
+	 */
+	public static void initLibrary() {
+		initLibrary((String)null);
+	}
+	public static void initLibrary(@Nullable Settings settings) {
+		initLibrary((settings != null) ? settings.loadLibraryName : null);
+	}
+	public static void initLibrary(@Nullable String libraryName) {
+		System.loadLibrary((libraryName != null && !libraryName.isEmpty()) ? libraryName : defaultLibName);
+	}
 
 	/**
 	 * Construct the maply controller with an Activity.  We need access to a few
@@ -365,7 +384,7 @@ public abstract class BaseController implements RenderController.TaskManager, Re
 //		System.loadLibrary("gnustl_shared");
 		if (settings != null && settings.loadLibraryName != null)
 			loadLibraryName = settings.loadLibraryName;
-		System.loadLibrary(loadLibraryName);
+		initLibrary(loadLibraryName);
 		libraryLoaded = true;
 
 		// These are objects that can potentially be created on the C++ side before we create
@@ -575,13 +594,16 @@ public abstract class BaseController implements RenderController.TaskManager, Re
 	 * @param handlesViewUpdates If set, the layer thread will deal with view updates.
 	 *                           If not set, it's a simpler layer thread.
      */
-	public LayerThread makeLayerThread(boolean handlesViewUpdates)
+	public LayerThread makeLayerThread(boolean handlesViewUpdates, String name)
 	{
 		if (!running)
 			return null;
 
+		if (name == null) {
+			name = "External Maply Thread";
+		}
 		// Create the layer thread
-		LayerThread newLayerThread = new LayerThread("External Maply Layer Thread",view,scene,handlesViewUpdates);
+		LayerThread newLayerThread = new LayerThread(name,view,scene,handlesViewUpdates);
 
 		synchronized (layerThreads) {
 			layerThreads.add(newLayerThread);
@@ -1058,6 +1080,13 @@ public abstract class BaseController implements RenderController.TaskManager, Re
 				return;
 			}
 
+			int[] ranges = new int[2];
+			int[] precisions = new int[1];
+			GLES20.glGetShaderPrecisionFormat(GLES20.GL_VERTEX_SHADER, GLES20.GL_HIGH_FLOAT, ranges, 0, precisions, 0);
+			if (!LayerThread.checkGLError(egl, "glGetShaderPrecisionFormat") && precisions[0] < 23) {
+				Log.w("Maply", "Vertex precision is only " + precisions[0]);
+			}
+
 			synchronized (layerThreads) {
 				for (LayerThread layerThread : layerThreads)
 					layerThread.viewUpdated(view);
@@ -1070,8 +1099,12 @@ public abstract class BaseController implements RenderController.TaskManager, Re
 
 			synchronized (workerThreads) {
 				// Create the working threads
-				for (int ii = 0; ii < numWorkingThreads; ii++)
-					workerThreads.add(makeLayerThread(false));
+				for (int ii = 0; ii < numWorkingThreads; ii++) {
+					final String name = String.format(Locale.getDefault(),
+							"Maply Worker %d of %d",
+							ii+1, numWorkingThreads);
+					workerThreads.add(makeLayerThread(false, name));
+				}
 			}
 
 			rendererAttached = true;
@@ -1394,8 +1427,8 @@ public abstract class BaseController implements RenderController.TaskManager, Re
 
 	/**
 	 * Look for a sampling layer that matches the parameters given.
-	 * Sampling layers can be shared for efficiency.  Don't be calling this yourself.
-	 * The loaders do it for you.
+	 * Sampling layers are shared for efficiency.
+	 * Don't be calling this yourself, the loaders do it for you.
 	 */
 	public QuadSamplingLayer findSamplingLayer(SamplingParams params,final QuadSamplingLayer.ClientInterface user)
 	{
@@ -1410,11 +1443,13 @@ public abstract class BaseController implements RenderController.TaskManager, Re
 		}
 
 		if (theLayer == null) {
-			// Set up the sampling layer
+			// No match, set up a new sampling layer and thread
 			theLayer = new QuadSamplingLayer(this,params);
 
 			// On its own layer thread
-			final LayerThread layerThread = makeLayerThread(true);
+			final String name = String.format(Locale.getDefault(),
+					"Maply Sampling Layer %d [%d]", samplingLayers.size()+1, params.hashCode());
+			final LayerThread layerThread = makeLayerThread(true, name);
 			if (layerThread == null) {
 				return null;
 			}

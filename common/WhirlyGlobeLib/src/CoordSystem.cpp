@@ -24,6 +24,23 @@ using namespace Eigen;
 namespace WhirlyKit
 {
 
+bool CoordSystem::isValid() const
+{
+    return bounds.valid();
+}
+
+MbrD CoordSystem::getBoundsLocal() const
+{
+    return { geographicToLocal2(bounds.ll()),
+             geographicToLocal2(bounds.ur()) };
+}
+
+bool CoordSystem::isSameAs(const CoordSystem *coordSys) const
+{
+    return coordSys && bounds == coordSys->bounds && canWrap == coordSys->canWrap;
+}
+
+
 Point3f CoordSystemConvert(const CoordSystem *inSystem,const CoordSystem *outSystem,const Point3f &inCoord)
 {
     // Easy if the coordinate systems are the same
@@ -44,11 +61,36 @@ Point3d CoordSystemConvert3d(const CoordSystem *inSystem,const CoordSystem *outS
     return outSystem->geocentricToLocal(inSystem->localToGeocentric(inCoord));
 }
 
+CoordSystemDisplayAdapter::CoordSystemDisplayAdapter(const CoordSystem *coordSys,const Point3d &center) :
+    center(center),
+    coordSys(coordSys)
+{
+    assert(coordSys);
+}
+
+CoordSystemDisplayAdapter::CoordSystemDisplayAdapter(const CoordSystemDisplayAdapter &other) :
+    center(other.center),
+    scale(other.scale),
+    coordSys(other.coordSys)
+{
+    assert(coordSys && scale.x() > 0.0);
+}
+
+CoordSystemDisplayAdapterRef CoordSystemDisplayAdapter::cloneWithCoordSys(CoordSystem *inCoordSys) const
+{
+    if (auto trooper = this->clone())
+    {
+        trooper->coordSys = inCoordSys;
+        return trooper;
+    }
+    return {};
+}
+
 GeneralCoordSystemDisplayAdapter::GeneralCoordSystemDisplayAdapter(CoordSystem *coordSys,const Point3d &ll,const Point3d &ur,
                                                                    const Point3d &inCenter,const Point3d &inScale) :
     CoordSystemDisplayAdapter(coordSys,inCenter),
-    ll(ll), ur(ur),
-    coordSys(coordSys)
+    ll(ll),
+    ur(ur)
 {
     scale = inScale;
     center = inCenter;
@@ -58,10 +100,26 @@ GeneralCoordSystemDisplayAdapter::GeneralCoordSystemDisplayAdapter(CoordSystem *
     geoUR = coordSys->localToGeographicD(ur);
 }
 
+GeneralCoordSystemDisplayAdapter::GeneralCoordSystemDisplayAdapter(const GeneralCoordSystemDisplayAdapter &other) :
+    CoordSystemDisplayAdapter(other),
+    ll(other.ll),
+    ur(other.ur),
+    dispLL(other.dispLL),
+    dispUR(other.dispUR),
+    geoLL(other.geoLL),
+    geoUR(other.geoUR)
+{
+}
+
+CoordSystemDisplayAdapterRef GeneralCoordSystemDisplayAdapter::clone() const
+{
+    return std::make_shared<GeneralCoordSystemDisplayAdapter>(*this);
+}
+
 bool GeneralCoordSystemDisplayAdapter::getBounds(Point3f &outLL,Point3f &outUR) const
 {
-    outLL = Point3f(ll.x(),ll.y(),ll.z());
-    outUR = Point3f(ur.x(),ur.y(),ur.z());
+    outLL = ll.cast<float>();
+    outUR = ur.cast<float>();
     return true;
 }
     
@@ -79,28 +137,24 @@ bool GeneralCoordSystemDisplayAdapter::getGeoBounds(Point2d &inLL,Point2d &inUR)
     return true;
 }
     
-Point3f GeneralCoordSystemDisplayAdapter::localToDisplay(Point3f localPt) const
+Point3f GeneralCoordSystemDisplayAdapter::localToDisplay(const Point3f &localPt) const
 {
-    return Point3f(localPt.x()*scale.x(),localPt.y()*scale.y(),localPt.z()*scale.z()) -
-            Point3f(center.x(),center.y(),center.z());
+    return (localPt.cast<double>().cwiseProduct(scale) - center).cast<float>();
 }
 
-Point3d GeneralCoordSystemDisplayAdapter::localToDisplay(Point3d localPt) const
+Point3d GeneralCoordSystemDisplayAdapter::localToDisplay(const Point3d &localPt) const
 {
-    return Point3d(localPt.x()*scale.x(),localPt.y()*scale.y(),localPt.z()*scale.z()) -
-            center;
+    return localPt.cwiseProduct(scale) - center;
 }
     
-Point3f GeneralCoordSystemDisplayAdapter::displayToLocal(Point3f dispPt) const
+Point3f GeneralCoordSystemDisplayAdapter::displayToLocal(const Point3f &dispPt) const
 {
-    return Point3f(dispPt.x()/scale.x(),dispPt.y()/scale.y(),dispPt.z()/scale.z()) +
-            Point3f(center.x(),center.y(),center.z());
+    return (dispPt.cast<double>().cwiseQuotient(scale) + center).cast<float>();
 }
 
-Point3d GeneralCoordSystemDisplayAdapter::displayToLocal(Point3d dispPt) const
+Point3d GeneralCoordSystemDisplayAdapter::displayToLocal(const Point3d &dispPt) const
 {
-    return Point3d(dispPt.x()/scale.x(),dispPt.y()/scale.y(),dispPt.z()/scale.z()) +
-            center;
+    return dispPt.cwiseQuotient(scale) + center;
 }
 
 }

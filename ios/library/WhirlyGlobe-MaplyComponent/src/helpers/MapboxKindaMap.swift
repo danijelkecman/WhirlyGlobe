@@ -28,6 +28,9 @@ public class MapboxKindaMap {
     // Works well zoomed out, less enticing zoomed in
     public var backgroundAllPolys = true
     
+    // If set, we'll use this to override the forceMinLevel default
+    public var forceMinLevel: Bool? = nil
+    
     // If set, a top level directory where we'll cache everything
     public var cacheDir: URL?
     
@@ -36,6 +39,11 @@ public class MapboxKindaMap {
     // For example, if you want to load from the bundle, but not have to change
     //  anything in the style sheet, just do this
     public var fileOverride : (_ file: URL) -> URL = { return $0 }
+    
+    // If set, we'll flip the indexing of tile sources in the Y axis
+    // The default is usually right.  Don't change this unless things loop out
+    //  of order vertically.
+    public var flipTileSources = true
     
     /**
          If you want to build the URL Requests yourself, maybe add some headers, change the timeout, whatever,
@@ -419,12 +427,21 @@ public class MapboxKindaMap {
                     print("Bad format in tileInfo for style sheet")
                     return
                 }
-                if let minZoom = source.tileSpec?["minzoom"] as? Int32,
-                    let maxZoom = source.tileSpec?["maxzoom"] as? Int32,
+                if var minZoom = source.tileSpec?["minzoom"] as? Int32,
+                    var maxZoom = source.tileSpec?["maxzoom"] as? Int32,
                     let tiles = source.tileSpec?["tiles"] as? [String] {
-                    let tileSource = MaplyRemoteTileInfoNew(baseURL: tiles[0], minZoom: minZoom, maxZoom: maxZoom)
+                    var newTileURLs = [String]()
+                    for tileURL in tiles {
+                        // We need the last bit, but we can't turn it into a valid URL
+                        if let idx = tileURL.firstIndex(of: "{") {
+                            let baseURL = String(tileURL[..<idx])
+                            let newBaseURL = (fileOverride(URL(string: baseURL)!).absoluteString)
+                            newTileURLs.append(newBaseURL + tileURL[idx...])
+                        }
+                    }
+                    let tileSource = MaplyRemoteTileInfoNew(baseURL: newTileURLs[0], minZoom: minZoom, maxZoom: maxZoom)
                     if let cacheDir = self.cacheDir {
-                        tileSource.cacheDir = cacheDir.appendingPathComponent(tiles[0].replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_").replacingOccurrences(of: "{", with: "").replacingOccurrences(of: "}", with: "").replacingOccurrences(of: "?", with: "_")).path
+                        tileSource.cacheDir = cacheDir.appendingPathComponent(newTileURLs[0].replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_").replacingOccurrences(of: "{", with: "").replacingOccurrences(of: "}", with: "").replacingOccurrences(of: "?", with: "_")).path
                     }
                     tileInfos.append(tileSource)
                 }
@@ -441,7 +458,13 @@ public class MapboxKindaMap {
                 }
             }
         }
-        
+
+        if tileInfos.isEmpty {
+            print("Failed to set up tile infos")
+            self.stop()
+            return
+        }
+
         // Parameters describing how we want a globe broken down
         let sampleParams = MaplySamplingParams()
         sampleParams.coordSys = MaplySphericalMercator(webStandard: ())
@@ -450,9 +473,9 @@ public class MapboxKindaMap {
         // If we don't have a solid underlayer for each tile, we can't really
         //  keep level 0 around all the time
         if !backgroundAllPolys {
-            sampleParams.forceMinLevel = false
+            sampleParams.forceMinLevel = forceMinLevel ?? false
         } else {
-            sampleParams.forceMinLevel = true
+            sampleParams.forceMinLevel = forceMinLevel ?? true
             sampleParams.minImportanceTop = 0.0
         }
         if viewC is WhirlyGlobeViewController {
@@ -491,6 +514,9 @@ public class MapboxKindaMap {
                 self.stop()
                 return
             }
+            imageLoader.flipY = flipTileSources
+            imageLoader.label = "MapboxKindaMap-ImageVectorHybrid";
+            // TODO: Doesn't handle more than one local source
             if !localFetchers.isEmpty {
                 imageLoader.setTileFetcher(localFetchers[0])
             }
@@ -660,6 +686,7 @@ public class MapboxKindaMap {
                                                         loadInterp: mapboxInterp,
                                                         viewC: viewC) {
                 pagingLoader.flipY = false
+                pagingLoader.label = "MapboxKindaMap-SimpleOverlay";
                 if !localFetchers.isEmpty {
                     pagingLoader.setTileFetcher(localFetchers[0])
                 }

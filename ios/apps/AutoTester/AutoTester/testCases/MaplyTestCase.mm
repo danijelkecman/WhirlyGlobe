@@ -29,9 +29,11 @@
 {
     // create and prepare the controller
     self.globeViewController = [[WhirlyGlobeViewController alloc] init];
-    // Note: Debugging
-//    self.globeViewController.useOpenGLES = true;
     self.baseViewController = self.globeViewController;
+    self.baseViewController.errorReportingDelegate = self;
+    
+    [self preSetUpWithGlobe:self.globeViewController];
+
     [nav pushViewController:self.baseViewController animated:YES];
     self.globeViewController.view.backgroundColor = [UIColor blackColor];
     self.globeViewController.clearColor = [UIColor blackColor];
@@ -51,11 +53,14 @@
     self.mapViewController = [[MaplyViewController alloc] initWithMapType:MaplyMapTypeFlat];
     self.mapViewController.viewWrap = true;
     self.baseViewController = self.mapViewController;
+    self.baseViewController.errorReportingDelegate = self;
     self.mapViewController.delegate = self;
     
     MaplyCoordinateSystem *coordSys = [self customCoordSystem];
     if (coordSys)
         self.mapViewController.coordSys = coordSys;
+
+    [self preSetUpWithMap:self.mapViewController];
 
     [nav pushViewController:self.baseViewController animated:YES];
     self.mapViewController.view.backgroundColor = [UIColor blackColor];
@@ -71,6 +76,14 @@
 - (MaplyCoordinateSystem * _Nullable)customCoordSystem
 {
 	return nil;
+}
+
+- (void)preSetUpWithGlobe:(WhirlyGlobeViewController *)globeVC
+{
+}
+
+- (void)preSetUpWithMap:(MaplyViewController *)mapVC
+{
 }
 
 - (void)setUpWithGlobe:(WhirlyGlobeViewController *)globeVC
@@ -294,5 +307,18 @@
     }
 }
 
+- (void)onError:(NSError * __nonnull)err
+        withTag:(NSString * __nonnull)tag
+          viewC:(NSObject<MaplyRenderControllerProtocol> * __nonnull)viewC
+{
+    NSLog(@"Error: %@ %@", tag, err);
+}
+
+- (void)onException:(NSException * __nonnull)err
+            withTag:(NSString * __nonnull)tag
+              viewC:(NSObject<MaplyRenderControllerProtocol> * __nonnull)viewC
+{
+    NSLog(@"Exception: %@ %@", tag, err);
+}
 
 @end

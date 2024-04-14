@@ -85,11 +85,11 @@ LabelRenderer::LabelRenderer(Scene *scene,
                              FontTextureManagerRef fontTexManager,
                              const LabelInfo *labelInfo,
                              SimpleIdentity maskProgID) :
+    labelInfo(labelInfo),
+    coordAdapter(scene->getCoordAdapter()),
     scene(scene),
     renderer(renderer),
-    coordAdapter(scene->getCoordAdapter()),
     fontTexManager(std::move(fontTexManager)),
-    labelInfo(labelInfo),
     maskProgID(maskProgID)
 {
 }
@@ -97,7 +97,7 @@ LabelRenderer::LabelRenderer(Scene *scene,
 Point3dVector LabelRenderer::convertGeoPtsToModelSpace(const VectorRing &inPts) const
 {
     CoordSystemDisplayAdapter *coordAdapt = scene->getCoordAdapter();
-    CoordSystem *coordSys = coordAdapt->getCoordSystem();
+    const CoordSystem *coordSys = coordAdapt->getCoordSystem();
 
     Point3dVector outPts;
     outPts.reserve(inPts.size());

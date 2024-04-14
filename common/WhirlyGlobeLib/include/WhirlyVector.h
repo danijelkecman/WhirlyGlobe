@@ -2,7 +2,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 1/18/11.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,27 +16,13 @@
  *  limitations under the License.
  */
 
-// Note: This works around a problem in compilation for the iphone
-#define EIGEN_DONT_VECTORIZE 1
-//#define EIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT 1
+#import "WhirlyEigen.h"
 
-#import <Eigen/Eigen>
 #import <vector>
+#import "Platform.h"
 
 namespace WhirlyKit
 {
-
-typedef Eigen::Vector3f Point3f;
-typedef Eigen::Vector3d Point3d;
-typedef Eigen::Vector2d Point2d;
-typedef Eigen::Vector2f Point2f;
-    
-typedef std::vector<Point2f,Eigen::aligned_allocator<Point2f> > Point2fVector;
-typedef std::vector<Point2d,Eigen::aligned_allocator<Point2d> > Point2dVector;
-typedef std::vector<Point3f,Eigen::aligned_allocator<Point3f> > Point3fVector;
-typedef std::vector<Point3d,Eigen::aligned_allocator<Point3d> > Point3dVector;
-typedef std::vector<Eigen::Vector4f,Eigen::aligned_allocator<Eigen::Vector4f> > Vector4fVector;
-typedef std::vector<Eigen::Vector4d,Eigen::aligned_allocator<Eigen::Vector4d> > Vector4dVector;
 
 /// Convenience wrapper for texture coordinate
 struct TexCoord : public Eigen::Vector2f
@@ -340,22 +326,36 @@ public:
     MbrD(const Mbr &inMbr) : pt_ll(Point2d(inMbr.ll().x(),inMbr.ll().y())), pt_ur(Point2d(inMbr.ur().x(),inMbr.ur().y())) { }
     /// Construct from the MBR of a vector of points
     MbrD(const Point2dVector &pts);
-    
+
+    template<std::size_t N>
+    MbrD(const Point2f (&pts)[N]) : pt_ll(0,0), pt_ur(-1,-1) { addPoints(pts); }
+    template<std::size_t N>
+    MbrD(const Point2d (&pts)[N]) : pt_ll(0,0), pt_ur(-1,-1) { addPoints(pts); }
+
     bool operator == (const MbrD &that) const;
-    
+    bool operator != (const MbrD &that) const { return !operator==(that); }
+
     /// Resets back to invalid
     void reset() { pt_ll = Point2d(0.0,0.0);  pt_ur = Point2d(-1.0,-1.0); }
     
     /// Lower left corner
     const Point2d &ll() const { return pt_ll; }
     Point2d &ll() { return pt_ll; }
+
     /// Lower right corner
     Point2d lr() const { return Point2d(pt_ur.x(),pt_ll.y()); }
+
     /// Upper right corner
     const Point2d &ur() const { return pt_ur; }
     Point2d &ur() { return pt_ur; }
+
     /// Upper left corner
-    Point2d ul() { return Point2d(pt_ll.x(),pt_ur.y()); }
+    Point2d ul() const { return Point2d(pt_ll.x(),pt_ur.y()); }
+    
+    // Single dimensions
+    Point2d x() const { return { pt_ll.x(), pt_ur.x() }; }
+    Point2d y() const { return { pt_ll.y(), pt_ur.y() }; }
+
     /// Middle
     const Point2d mid() const { return (pt_ll+pt_ur)/2.0; }
     
@@ -382,7 +382,12 @@ public:
     
     /// Extend the MBR by the given points
     void addPoints(const Point2dVector &coords);
-    
+
+    template<std::size_t N>
+    void addPoints(const Point2f (&pts)[N]) { for (std::size_t i=0;i<N;++i) addPoint(pts[i]); }
+    template<std::size_t N>
+    void addPoints(const Point2d (&pts)[N]) { for (std::size_t i=0;i<N;++i) addPoint(pts[i]); }
+
     /// See if this Mbr overlaps the other one
     bool overlaps(const MbrD &that) const;
 
@@ -453,8 +458,15 @@ public:
     
     /// Construct invalid
 	GeoMbr() : pt_ll(BadVal,BadVal), pt_ur(BadVal,BadVal) { }
+    GeoMbr(GeoMbr &&that) : GeoMbr(that.pt_ll, that.pt_ur) { }
+    GeoMbr(const GeoMbr &that) : GeoMbr(that.pt_ll, that.pt_ur) { }
+    GeoMbr(const MbrD &that) : GeoMbr(that.ll(), that.ur()) { }
+    GeoMbr(Mbr &&that) : GeoMbr(that.ll(), that.ur()) { }
+    GeoMbr(const Mbr &that) : GeoMbr(that.ll(), that.ur()) { }
     /// Construct with two coordinates to start
-	GeoMbr(const Point2f &ll,const Point2f &ur) : pt_ll(ll), pt_ur(ur) { }
+    GeoMbr(Point2f &&ll, Point2f &&ur) : pt_ll(ll), pt_ur(ur) { }
+    GeoMbr(const Point2f &ll,const Point2f &ur) : pt_ll(ll), pt_ur(ur) { }
+    GeoMbr(const Point2d &ll,const Point2d &ur) : pt_ll(ll.cast<float>()), pt_ur(ur.cast<float>()) { }
 	/// Construct from a list of geo coordinates
 	GeoMbr(const std::vector<GeoCoord> &coords);
 	/// Construct with a list of 2d coordinates.  X is lon, Y is lat
@@ -462,6 +474,10 @@ public:
 
     /// Resets back to invalid
     void reset() { pt_ll = GeoCoord(BadVal,BadVal);  pt_ur = GeoCoord(BadVal,BadVal); }
+
+    /// Resets to specific values
+    void reset(Point2f &&ll, Point2f &&ur) { pt_ll = ll;  pt_ur = ur; }
+    void reset(const Point2f &ll, const Point2f &ur) { pt_ll = ll;  pt_ur = ur; }
 
 	/// Fetch the lower left
 	const GeoCoord &ll() const { return pt_ll; }
@@ -516,8 +532,20 @@ public:
     
     /// Expand this MBR by the bounds of the other one
     void expand(const GeoMbr &mbr);
-    
+
     operator Mbr() const { return Mbr(pt_ll,pt_ur); }
+
+    GeoMbr &operator=(GeoMbr &&that) { pt_ll = that.pt_ll; pt_ur = that.pt_ur; return *this; }
+    GeoMbr &operator=(const GeoMbr &that) { pt_ll = that.pt_ll; pt_ur = that.pt_ur; return *this; }
+
+    GeoMbr &operator=(Mbr &&that) { pt_ll = that.ll(); pt_ur = that.ur(); return *this; }
+    GeoMbr &operator=(const Mbr &that) { pt_ll = that.ll(); pt_ur = that.ur(); return *this; }
+
+    bool operator==(GeoMbr &&that) const { return pt_ll == that.pt_ll && pt_ur == that.pt_ur; }
+    bool operator==(const GeoMbr &that) const { return pt_ll == that.pt_ll && pt_ur == that.pt_ur; }
+
+    bool operator==(Mbr &&that) const { return pt_ll == that.ll() && pt_ur == that.ur(); }
+    bool operator==(const Mbr &that) const { return pt_ll == that.ll() && pt_ur == that.ur(); }
 
     /// Break into one or two MBRs
 	void splitIntoMbrs(std::vector<Mbr> &mbrs) const;
@@ -570,10 +598,26 @@ Eigen::Matrix<TA,3,1> Scale(const Eigen::Matrix<TA,3,1> &a, const Eigen::Matrix<
     return {a.x() * b.x(), a.y() * b.y(), a.z() * b.z() };
 }
 
+/// Slice off the last component (or two)
+// v[Eigen::seq(0,2)] might be better, but doesn't seem to be available in this version...
 template <typename T>
-Eigen::Matrix<T,2,1> Slice(const Eigen::Matrix<T,3,1> &v) { return {v.x(), v.y() }; }
+Eigen::Matrix<T,2,1> Slice(const Eigen::Matrix<T,3,1> &v) { return { v.x(), v.y() }; }
+template <typename T>
+Eigen::Matrix<T,3,1> Slice(const Eigen::Matrix<T,4,1> &v) { return { v.x(), v.y(), v.z() }; }
+template <typename T>
+Eigen::Matrix<T,2,1> Slice2(const Eigen::Matrix<T,4,1> &v) { return { v.x(), v.y() }; }
+
+/// Pad out with one (or two) additional components
 template <typename T>
 Eigen::Matrix<T,3,1> Pad(const Eigen::Matrix<T,2,1> &v, T z = 0) { return { v.x(), v.y(), z }; }
+template <typename T>
+Eigen::Matrix<T,4,1> Pad(const Eigen::Matrix<T,2,1> &v, T z, T w) { return { v.x(), v.y(), z, w }; }
+template <typename T>
+Eigen::Matrix<T,4,1> Pad(const Eigen::Matrix<T,3,1> &v, T w = 0) { return { v.x(), v.y(), v.z(), w }; }
+
+/// Convert from clip-space by dividing the first three components by the fourth
+template <typename T>
+Eigen::Matrix<T,3,1> Clip(const Eigen::Matrix<T,4,1> &v) { return Slice(Eigen::Matrix<T,4,1>(v / v.w())); }
 
 // Slice with arbitrary (inlined) function
 template <typename TI,typename TO>

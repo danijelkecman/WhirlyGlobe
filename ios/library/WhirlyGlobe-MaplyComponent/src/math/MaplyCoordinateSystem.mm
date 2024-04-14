@@ -1,9 +1,8 @@
-/*
- *  MaplyCoordinateSystem.h
+/*  MaplyCoordinateSystem.h
  *  WhirlyGlobe-MaplyComponent
  *
  *  Created by Steve Gifford on 5/13/13.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -15,10 +14,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- *
  */
 
 #import "MaplyCoordinateSystem_private.h"
+#import "NSString+Stuff.h"
 
 using namespace Eigen;
 using namespace WhirlyKit;
@@ -39,7 +38,47 @@ using namespace WhirlyKit;
 
 - (void)dealloc
 {
-    coordSystem = NULL;
+    coordSystem = nullptr;
+}
+
+- (MaplyCoordinate)ll
+{
+    if (coordSystem)
+    {
+        const auto &ll = coordSystem->getBounds().ll();
+        return { ll.x(), ll.y() };
+    }
+    return {0,0};
+}
+
+- (MaplyCoordinate)ur
+{
+    if (coordSystem)
+    {
+        const auto &ur = coordSystem->getBounds().ur();
+        return { ur.x(), ur.y() };
+    }
+    return {0,0};
+}
+
+- (MaplyCoordinateD)llD
+{
+    if (coordSystem)
+    {
+        const auto &ll = coordSystem->getBounds().ll();
+        return { ll.x(), ll.y() };
+    }
+    return {0,0};
+}
+
+- (MaplyCoordinateD)urD
+{
+    if (coordSystem)
+    {
+        const auto &ur = coordSystem->getBounds().ur();
+        return { ur.x(), ur.y() };
+    }
+    return {0,0};
 }
 
 - (WhirlyKit::CoordSystemRef)getCoordSystem
@@ -59,42 +98,70 @@ using namespace WhirlyKit;
 
 - (void)setBounds:(MaplyBoundingBox)bounds
 {
-    auto ll = [self localToGeo:bounds.ll];
-    auto ur = [self localToGeo:bounds.ur];
+    const auto ll = [self localToGeo:bounds.ll];
+    const auto ur = [self localToGeo:bounds.ur];
 	[self setBoundsLL:&ll ur:&ur];
 }
 
 - (void)setBoundsD:(MaplyBoundingBoxD)boundsD
 {
-    // Note: We don't have double versions of localToGeo exposed
-    MaplyBoundingBox box;
-    box.ll = MaplyCoordinateMake(boundsD.ll.x, boundsD.ll.y);
-    box.ur = MaplyCoordinateMake(boundsD.ur.x, boundsD.ur.y);
-    [self setBounds:box];
+    const auto ll = [self localToGeoD:boundsD.ll];
+    const auto ur = [self localToGeoD:boundsD.ur];
+    [self setBoundsDLL:&ll ur:&ur];
 }
 
-- (void)setBoundsLL:(MaplyCoordinate *)inLL ur:(MaplyCoordinate *)inUR
+- (void)setBoundsDLocal:(MaplyBoundingBoxD)boundsD
 {
-    ll.x = inLL->x;    ll.y = inLL->y;
-    ur.x = inUR->x;    ur.y = inUR->y;
+    if (coordSystem)
+    {
+        coordSystem->setBounds(MbrD({boundsD.ll.x,boundsD.ll.y}, {boundsD.ur.x,boundsD.ur.y}));
+    }
+}
+
+- (void)setBoundsLL:(const MaplyCoordinate *)inLL ur:(const MaplyCoordinate *)inUR
+{
+    if (coordSystem && inLL && inUR)
+    {
+        coordSystem->setBounds(MbrD({inLL->x, inLL->y}, {inUR->x, inUR->y}));
+    }
+}
+
+- (void)setBoundsDLL:(const MaplyCoordinateD *)inLL ur:(const MaplyCoordinateD *)inUR
+{
+    if (coordSystem && inLL && inUR)
+    {
+        coordSystem->setBounds(MbrD({inLL->x, inLL->y}, {inUR->x, inUR->y}));
+    }
 }
 
 - (MaplyBoundingBox)getBounds
 {
-    const Point3d llLoc = coordSystem->geographicToLocal(Point2d(ll.x, ll.y));
-    const Point3d urLoc = coordSystem->geographicToLocal(Point2d(ur.x, ur.y));
+    const Point3d llLoc = coordSystem->geographicToLocal(coordSystem->getBoundsD().ll());
+    const Point3d urLoc = coordSystem->geographicToLocal(coordSystem->getBoundsD().ur());
     return {{(float)llLoc.x(),(float)llLoc.y()},{(float)urLoc.x(),(float)urLoc.y()}};
 }
 
-- (void)getBoundsLL:(MaplyCoordinate *)ret_ll ur:(MaplyCoordinate *)ret_ur
+- (void)getBoundsLL:(MaplyCoordinate *)inLL ur:(MaplyCoordinate *)inUR
 {
-    if (ret_ll)
+    if (inLL)
     {
-        ret_ll->x = ll.x; ret_ll->y = ll.y;
+        *inLL = self.ll;
     }
-    if (ret_ur)
+    if (inUR)
     {
-        ret_ur->x = ur.x; ret_ur->y = ur.y;
+        *inUR = self.ur;
+    }
+}
+
+- (void)getBoundsDLL:(MaplyCoordinateD * __nullable)inLL ur:(MaplyCoordinateD * __nullable)inUR
+{
+    if (inLL)
+    {
+        *inLL = self.llD;
+    }
+    if (inUR)
+    {
+        *inUR = self.urD;
     }
 }
 
@@ -120,6 +187,12 @@ using namespace WhirlyKit;
     return retCoord;
 }
 
+- (MaplyCoordinateD)localToGeoD:(MaplyCoordinateD)coord
+{
+    const auto geo = coordSystem->localToGeographicD({coord.x,coord.y,0.0});
+    return {geo.x(), geo.y()};
+}
+
 - (MaplyCoordinate3dD)localToGeocentric:(MaplyCoordinate3dD)coord
 {
     Point3d pt = coordSystem->localToGeocentric(Point3d(coord.x,coord.y,coord.z));
@@ -138,6 +211,14 @@ using namespace WhirlyKit;
     return ret;
 }
 
+- (void)setCanBeWrapped:(bool)b
+{
+    if (coordSystem)
+    {
+        coordSystem->setCanBeWrapped(b);
+    }
+}
+
 @end
 
 @implementation MaplyPlateCarree
@@ -149,37 +230,25 @@ using namespace WhirlyKit;
 
 - (instancetype)initWithBoundingBox:(MaplyBoundingBox)bbox
 {
-    PlateCarreeCoordSystem *coordSys = new PlateCarreeCoordSystem();
-    self = [super initWithCoordSystem:CoordSystemRef(coordSys)];
-    ll.x = bbox.ll.x;
-    ll.y = bbox.ll.y;
-    ur.x = bbox.ur.x;
-    ur.y = bbox.ur.y;
-    
+    if ((self = [super initWithCoordSystem:std::make_shared<PlateCarreeCoordSystem>()]))
+    {
+        [self setBounds:bbox];
+    }
     return self;
 }
 
 - (nullable instancetype)initWithBoundingBoxD:(MaplyBoundingBoxD)bbox
 {
-    PlateCarreeCoordSystem *coordSys = new PlateCarreeCoordSystem();
-    self = [super initWithCoordSystem:CoordSystemRef(coordSys)];
-    ll.x = bbox.ll.x;
-    ll.y = bbox.ll.y;
-    ur.x = bbox.ur.x;
-    ur.y = bbox.ur.y;
-    
+    if ((self = [super initWithCoordSystem:std::make_shared<PlateCarreeCoordSystem>()]))
+    {
+        [self setBoundsD:bbox];
+    }
     return self;
 }
 
 - (instancetype)initFullCoverage
 {
-    PlateCarreeCoordSystem *coordSys = new PlateCarreeCoordSystem();
-    self = [super initWithCoordSystem:CoordSystemRef(coordSys)];
-    Point3f pt0 = coordSys->geographicToLocal(GeoCoord::CoordFromDegrees(-180, -90));
-    Point3f pt1 = coordSys->geographicToLocal(GeoCoord::CoordFromDegrees(180, 90));
-    ll.x = pt0.x();  ll.y = pt0.y();
-    ur.x = pt1.x();  ur.y = pt1.y();
-    
+    self = [super initWithCoordSystem:std::make_shared<PlateCarreeCoordSystem>()];
     return self;
 }
 
@@ -204,13 +273,7 @@ using namespace WhirlyKit;
 
 - (instancetype)initWebStandard
 {
-    SphericalMercatorCoordSystem *coordSys = new SphericalMercatorCoordSystem();
-    self = [super initWithCoordSystem:CoordSystemRef(coordSys)];
-    Point3d pt0 = coordSys->geographicToLocal(Point2d(-180/180.0 * M_PI,-85.05113/180.0 * M_PI));
-    Point3d pt1 = coordSys->geographicToLocal(Point2d( 180/180.0 * M_PI, 85.05113/180.0 * M_PI));
-    ll.x = pt0.x();  ll.y = pt0.y();
-    ur.x = pt1.x();  ur.y = pt1.y();
-    
+    self = [super initWithCoordSystem:SphericalMercatorCoordSystem::makeWebStandard()];
     return self;
 }
 
@@ -228,22 +291,30 @@ using namespace WhirlyKit;
 
 @implementation MaplyProj4CoordSystem
 {
-    Proj4CoordSystem *p4CoordSys;
 }
 
 - (nonnull instancetype)initWithString:(NSString * __nonnull)proj4Str
 {
-    self = [super init];
-    std::string str = [proj4Str cStringUsingEncoding:NSASCIIStringEncoding];
-    p4CoordSys = new Proj4CoordSystem(str);
-    coordSystem = CoordSystemRef(p4CoordSys);
-        
+    if (!(self = [super init]))
+    {
+        return nil;
+    }
+    std::string str = [proj4Str cStringUsingEncoding:NSASCIIStringEncoding withDefault:""];
+    if (str.empty())
+    {
+        return nil;
+    }
+    coordSystem = std::make_shared<Proj4CoordSystem>(std::move(str));
     return self;
 }
 
 - (bool)valid
 {
-    return p4CoordSys != nil && p4CoordSys->isValid();
+    if (auto cs = dynamic_cast<const Proj4CoordSystem*>(coordSystem.get()))
+    {
+        return cs->isValid();
+    }
+    return false;
 }
 
 @end

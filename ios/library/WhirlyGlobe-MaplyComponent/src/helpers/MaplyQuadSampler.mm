@@ -1,9 +1,8 @@
-/*
- *  MaplyQuadSamplingLayer.mm
+/*  MaplyQuadSamplingLayer.mm
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 3/27/18.
- *  Copyright 2011-2019 Saildrone Inc
+ *  Copyright 2011-2022 Saildrone Inc
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -15,7 +14,6 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- *
  */
 
 #import "MaplyQuadSampler_private.h"
@@ -38,13 +36,20 @@ using namespace WhirlyKit;
 
 - (void)setCoordSys:(MaplyCoordinateSystem *)coordSys
 {
-    params.coordSys = [coordSys getCoordSystem];
-    
-    // Bounds are in projected coordinates
-    const auto bbox = [coordSys getBounds];
-    params.coordBounds.reset();
-    params.coordBounds.addPoint(Point2d(bbox.ll.x, bbox.ll.y));
-    params.coordBounds.addPoint(Point2d(bbox.ur.x, bbox.ur.y));
+    _coordSys = coordSys;
+    params.setCoordSys([coordSys getCoordSystem]);
+}
+
+- (MaplyBoundingBox) getCoordBounds
+{
+    return MaplyBoundingBox {
+        .ll = MaplyCoordinateMake((float)params.coordBounds.ll().x(), (float)params.coordBounds.ll().y()),
+        .ur = MaplyCoordinateMake((float)params.coordBounds.ur().x(), (float)params.coordBounds.ur().y()),
+    };
+}
+- (void)setCoordBounds:(MaplyBoundingBox)bbox
+{
+    params.coordBounds = MbrD({bbox.ll.x,bbox.ll.y},{bbox.ur.x,bbox.ur.y});
 }
 
 - (int)minZoom
@@ -210,6 +215,16 @@ using namespace WhirlyKit;
     params.clipBounds.addPoint(Point2d(clipBounds.ur.x,clipBounds.ur.y));
 }
 
+- (bool)useClipBoundsForImportance
+{
+    return params.useClipBoundsForImportance;
+}
+
+- (void)setUseClipBoundsForImportance:(bool)useClipBoundsForImportance
+{
+    params.useClipBoundsForImportance = useClipBoundsForImportance;
+}
+
 - (bool)hasClipBounds
 {
     return params.clipBounds.valid();
@@ -242,14 +257,18 @@ using namespace WhirlyKit;
     return self;
 }
 
-- (bool)startLayer:(WhirlyKitLayerThread *)inLayerThread scene:(WhirlyKit::Scene *)inScene renderer:(SceneRenderer *)inRenderer viewC:(MaplyBaseViewController *)inViewC
+- (bool)startLayer:(WhirlyKitLayerThread *)inLayerThread
+             scene:(WhirlyKit::Scene *)inScene
+          renderer:(SceneRenderer *)inRenderer
+             viewC:(MaplyBaseViewController *)inViewC
 {
     viewC = inViewC;
     super.layerThread = inLayerThread;
     
     sampleControl.start(_params,inScene,inRenderer);
     
-    _quadLayer = [[WhirlyKitQuadDisplayLayerNew alloc] initWithController:sampleControl.getDisplayControl()];
+    _quadLayer = [[WhirlyKitQuadDisplayLayerNew alloc] initWithController:sampleControl.getDisplayControl()
+                                                            renderControl: [inViewC getRenderControl]];
 
     [inLayerThread addLayer:_quadLayer];
 

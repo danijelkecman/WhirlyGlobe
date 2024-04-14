@@ -35,32 +35,29 @@ RenderTargetGLES::RenderTargetGLES(SimpleIdentity newID) : RenderTarget(newID)
 {
     init();
 }
-    
-RenderTargetGLES::~RenderTargetGLES()
-{
-}
-    
+
 void RenderTargetGLES::init()
 {
     RenderTarget::init();
-    framebuffer = 0;
-    colorbuffer = 0;
-    depthbuffer = 0;
 }
     
 bool RenderTargetGLES::init(SceneRenderer *inRenderer,Scene *scene,SimpleIdentity targetTexID)
 {
-    SceneRendererGLES *renderer = (SceneRendererGLES *)inRenderer;
+    auto *renderer = (SceneRendererGLES *)inRenderer;
     
     if (framebuffer == 0)
+    {
         glGenFramebuffers(1, &framebuffer);
+    }
     
     // Our destination is a texture in this case
     if (targetTexID)
     {
         colorbuffer = 0;
         setTargetTexture(inRenderer,scene,targetTexID);
-    } else {
+    }
+    else
+    {
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         
         // Generate our own color buffer
@@ -104,7 +101,7 @@ bool RenderTargetGLES::setTargetTexture(SceneRenderer *sceneRender,Scene *scene,
     if (tex)
         setTargetTexture(tex.get());
     
-    return tex != NULL;
+    return tex != nullptr;
 }
 
 void RenderTargetGLES::setTargetTexture(TextureBase *inTex)

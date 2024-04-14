@@ -68,11 +68,16 @@
  
  In general, we want to cache.  The globe, in particular,
  is going to fetch the same tiles over and over, quite a lot.
- The cacheing behavior is a little dumb.  It will just write
+ The caching behavior is a little dumb.  It will just write
  files to the given directory forever.  If you're interacting
  with a giant image pyramid, that could be problematic.
  */
 @property (nonatomic, retain,nullable) NSString *cacheDir;
+
+/**
+ Control the cache policy on NSUrlRequest
+ */
+@property (nonatomic) NSURLRequestCachePolicy systemCachePolicy;
 
 /**
  Optional headers to add to the NSURLRequest.
@@ -226,7 +231,13 @@
 @property (nonatomic) int localData;
 
 // Total time spent waiting for successful remote data requests
-@property (nonatomic) NSTimeInterval totalLatency;
+@property (nonatomic) NSTimeInterval totalResponseTime;
+
+// Total number of up-stream (not local) cache hits
+@property (nonatomic) int remoteCacheHits;
+
+// Total number of up-stream (not local) cache misses
+@property (nonatomic) int remoteCacheMisses;
 
 // The maximum number of requests we've had at once (since the last reset)
 @property (nonatomic) int maxActiveRequests;

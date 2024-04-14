@@ -23,9 +23,8 @@
 namespace WhirlyKit
 {
 
-QuadTileBuilder::QuadTileBuilder(CoordSystemRef coordSys,QuadTileBuilderDelegate *delegate) :
-    delegate(delegate),
-    debugMode(false)
+QuadTileBuilder::QuadTileBuilder(CoordSystemRef coordSys, QuadTileBuilderDelegate *delegate) :
+    delegate(delegate)
 {
     geomSettings.sampleX = 20;
     geomSettings.sampleY = 20;
@@ -144,8 +143,9 @@ void QuadTileBuilder::setController(QuadDisplayControllerNew *inControl)
 {
     QuadLoaderNew::setController(inControl);
     
-    const MbrD mbr = MbrD(control->getDataStructure()->getValidExtents());
-    geomManage.setup(inControl->getRenderer(),geomSettings,control, control->getScene()->getCoordAdapter(),geomManage.coordSys,mbr);
+    const MbrD mbr = control->getDataStructure()->getValidExtents();
+    geomManage.setup(inControl->getRenderer(), geomSettings, control,
+                     control->getScene()->getCoordAdapter(),geomManage.coordSys,mbr);
     
     delegate->setBuilder(this,control);
 }

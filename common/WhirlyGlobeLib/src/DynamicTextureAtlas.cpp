@@ -2,7 +2,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 2/28/13.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ using namespace Eigen;
 namespace WhirlyKit
 {
 
-DynamicTexture::DynamicTexture(const std::string &name)
-: TextureBase(name), layoutGrid(NULL)
+DynamicTexture::DynamicTexture(const std::string &name) :
+    TextureBase(name)
 {
 }
 
@@ -45,22 +45,23 @@ void DynamicTexture::setup(int inTexSize,int inCellSize,TextureType inType,bool 
 
 DynamicTexture::~DynamicTexture()
 {
-    if (!layoutGrid)
-        return;
-    
-    delete [] layoutGrid;
-    layoutGrid = NULL;
+    try
+    {
+        delete [] layoutGrid;
+        layoutGrid = nullptr;
+    }
+    WK_STD_DTOR_CATCH()
 }
-    
+
 void DynamicTexture::addTexture(Texture *tex,const Region &region)
 {
-    int startX = region.sx * cellSize;
-    int startY = region.sy * cellSize;
-    int width = tex->getWidth();
-    int height = tex->getHeight();
-    
+    const int startX = region.sx * cellSize;
+    const int startY = region.sy * cellSize;
+    const int width = tex->getWidth();
+    const int height = tex->getHeight();
+
     RawDataRef data = tex->processData();
-    addTextureData(startX,startY,width,height,data);
+    addTextureData(startX,startY,width,height,std::move(data));
 }
 
 void DynamicTexture::setRegion(const Region &region, bool enable)
@@ -149,11 +150,6 @@ void DynamicTexture::addRegionToClear(const Region &region)
     releasedRegions.push_back(region);
 }
 
-bool DynamicTexture::empty()
-{
-    return numRegions == 0;
-}
-
 void DynamicTexture::getUtilization(int &outNumCell,int &usedCell)
 {
     outNumCell = numCell*numCell;
@@ -177,8 +173,10 @@ void DynamicTextureClearRegion::execute(Scene *scene,SceneRenderer *renderer,Vie
 
 DynamicTextureAddRegion::~DynamicTextureAddRegion()
 {
-    if (!wasRun)
+    if (!wasRun && data)
+    {
         wkLogLevel(Warn,"DynamicTextureAddRegion deleted without being run.");
+    }
 }
     
 void DynamicTextureAddRegion::execute(Scene *scene,SceneRenderer *renderer,View *view)
@@ -193,11 +191,6 @@ void DynamicTextureAddRegion::execute(Scene *scene,SceneRenderer *renderer,View 
     wasRun = true;
 }
    
-DynamicTextureAtlas::TextureRegion::TextureRegion()
-  : dynTexId(EmptyIdentity)
-{
-}
-
 // If set, we ask the main thread to do the sub texture loads
 #if TARGET_IPHONE_SIMULATOR
     static const bool MainThreadMerge = true;
@@ -210,9 +203,14 @@ DynamicTextureAtlas::TextureRegion::TextureRegion()
 #endif
 #endif
 
-    
-DynamicTextureAtlas::DynamicTextureAtlas(const std::string &name,int texSize,int cellSize,TextureType format,int imageDepth,bool mainThreadMerge)
-    : name(name), texSize(texSize), cellSize(cellSize), format(format), imageDepth(imageDepth),  pixelFudge(0.0), mainThreadMerge(mainThreadMerge), clearTextures(false), interpType(TexInterpLinear)
+DynamicTextureAtlas::DynamicTextureAtlas(std::string name,int texSize,int cellSize,
+                                         TextureType format,int imageDepth,bool mainThreadMerge) :
+    name(std::move(name)),
+    format(format),
+    imageDepth(imageDepth),
+    texSize(texSize),
+    cellSize(cellSize),
+    mainThreadMerge(mainThreadMerge)
 {
     if (mainThreadMerge || MainThreadMerge)
     {
@@ -222,36 +220,24 @@ DynamicTextureAtlas::DynamicTextureAtlas(const std::string &name,int texSize,int
     
 DynamicTextureAtlas::~DynamicTextureAtlas()
 {
-    // Clean up anything we might have left over
-    for (auto *it : textures)
+    try
     {
-        delete it;
+        // Clean up anything we might have left over
+        for (auto *it : textures)
+        {
+            delete it;
+        }
+        textures.clear();
     }
-    textures.clear();
-}
-    
-/// Set the interpolation type used for min and mag
-void DynamicTextureAtlas::setInterpType(TextureInterpType inType)
-{
-    interpType = inType;
+    WK_STD_DTOR_CATCH()
 }
 
-TextureInterpType DynamicTextureAtlas::getInterpType() const
-{
-    return interpType;
-}
-
-TextureType DynamicTextureAtlas::getFormat() const
-{
-    return format;
-}
-
-void DynamicTextureAtlas::setPixelFudgeFactor(float pixFudge)
-{
-    pixelFudge = pixFudge;
-}
-
-bool DynamicTextureAtlas::addTexture(SceneRenderer *sceneRender,const std::vector<Texture *> &newTextures,int frame,const Point2f *realSize,const Point2f *realOffset,SubTexture &subTex,ChangeSet &changes,int borderPixels,int bufferPixels,TextureRegion *outTexRegion)
+bool DynamicTextureAtlas::addTexture(SceneRenderer *sceneRender,
+                                     const std::vector<Texture *> &newTextures,
+                                     int frame, const Point2f *realSize,
+                                     const Point2f *realOffset, SubTexture &subTex,
+                                     ChangeSet &changes, int borderPixels, int bufferPixels,
+                                     TextureRegion *outTexRegion)
 {
     if (newTextures.size() != imageDepth && frame < 0)
         return false;
@@ -271,10 +257,10 @@ bool DynamicTextureAtlas::addTexture(SceneRenderer *sceneRender,const std::vecto
         std::vector<DynamicTexture::Region> toClear = firstDynTex->getReleasedRegions();
         for (const DynamicTexture::Region &clearRegion : toClear)
         {
-            for (unsigned int ii=0;ii<dynTexVec->size();ii++)
+            for (const auto &dynTex : *dynTexVec)
             {
-                const DynamicTextureRef &dynTex = dynTexVec->at(ii);
-                dynTex->clearRegion(clearRegion,changes,doMainThreadMerge,doMainThreadMerge ? &emptyPixelBuffer[0] : nullptr);
+                dynTex->clearRegion(clearRegion,changes,doMainThreadMerge,
+                                    doMainThreadMerge ? &emptyPixelBuffer[0] : nullptr);
             }
         }
     }

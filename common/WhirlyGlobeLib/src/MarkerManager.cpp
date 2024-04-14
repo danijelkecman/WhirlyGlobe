@@ -2,7 +2,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 7/16/13.
- *  Copyright 2011-2022 mousebird consulting.
+ *  Copyright 2011-2023 mousebird consulting.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -169,9 +169,9 @@ MarkerManager::~MarkerManager()
     // destructors must never throw, wrap stuff that might fail
     try
     {
-        std::lock_guard<std::mutex> guardLock(lock);
-
+        std::unique_lock<std::mutex> guardLock(lock);
         auto reps = std::move(markerReps);
+        guardLock.unlock();
         for (auto markerRep : reps)
         {
             delete markerRep;
@@ -185,7 +185,7 @@ typedef std::map<SimpleIDSet,BasicDrawableBuilderRef> DrawableMap;
 Point3dVector MarkerManager::convertGeoPtsToModelSpace(const VectorRing &inPts)
 {
     CoordSystemDisplayAdapter *coordAdapt = scene->getCoordAdapter();
-    CoordSystem *coordSys = coordAdapt->getCoordSystem();
+    const CoordSystem *coordSys = coordAdapt->getCoordSystem();
 
     Point3dVector outPts;
     outPts.reserve(inPts.size());
@@ -197,6 +197,14 @@ Point3dVector MarkerManager::convertGeoPtsToModelSpace(const VectorRing &inPts)
     }
     
     return outPts;
+}
+
+SimpleIdentity MarkerManager::addMarkers(const std::vector<Marker> &markers,const MarkerInfo &markerInfo,ChangeSet &changes)
+{
+    std::vector<Marker*> pointers;
+    std::transform(markers.begin(), markers.end(), std::back_inserter(pointers),
+                   [](auto &m){ return const_cast<Marker*>(&m); });
+    return addMarkers(pointers, markerInfo, changes);
 }
 
 SimpleIdentity MarkerManager::addMarkers(const std::vector<Marker *> &markers,const MarkerInfo &markerInfo,ChangeSet &changes)

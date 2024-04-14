@@ -2,7 +2,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 5/16/19.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,52 +26,108 @@
 namespace WhirlyKit
 {
 
-TextureMTL::TextureMTL(const std::string &name)
-    : Texture(name), TextureBaseMTL(name), TextureBase(name)
+TextureMTL::TextureMTL() : TextureMTL(std::string())
 {
 }
 
-TextureMTL::TextureMTL(const std::string &name,RawDataRef texData,bool isPVRTC)
-    : Texture(name,texData,isPVRTC), TextureBaseMTL(name), TextureBase(name)
+TextureMTL::TextureMTL(std::string name) :
+    TextureBase(std::move(name)),
+    Texture(),
+    TextureBaseMTL()
 {
-    if (!texData) {
-        NSLog(@"TextureMTL: Got texture with empty data");
+}
+
+TextureMTL::TextureMTL(std::string name, UIImage *inImage, int inWidth, int inHeight) :
+    TextureBase(std::move(name)),
+    Texture(),
+    TextureBaseMTL()
+{
+    if (NSData *data = [inImage rawDataScaleWidth:inWidth height:inHeight border:0])
+    {
+        width = inWidth;
+        height = inHeight;
+
+        if ((width == 0 || height == 0) && data)
+        {
+            wkLogLevel(Error, "TextureMTL: Got textures with 0 width or height");
+        }
+
+        texData = std::make_shared<RawNSDataReader>(data);
     }
-    RawNSDataReaderRef texDataRef = std::dynamic_pointer_cast<RawNSDataReader>(texData);
-    if (texDataRef && texDataRef->getData() == nil) {
-        NSLog(@"TextureMTL: Got texture with empty data");
+}
+
+TextureMTL::TextureMTL(std::string name, UIImage *inImage) :
+    TextureBase(std::move(name)),
+    Texture(),
+    TextureBaseMTL()
+{
+    if (NSData *data = [inImage rawDataRetWidth:&width height:&height roundUp:true])
+    {
+        if ((width == 0 || height == 0) && data)
+        {
+            wkLogLevel(Error, "TextureMTL: Got textures with 0 width or height");
+        }
+
+        texData = std::make_shared<RawNSDataReader>(data);
     }
 }
-    
-TextureMTL::TextureMTL(const std::string &name,UIImage *inImage,int inWidth,int inHeight)
-    : Texture(name), TextureBase(name), TextureBaseMTL(name)
+
+static const vImage_CGImageFormat r4Format = {
+    .bitsPerComponent = 4,
+    .bitsPerPixel = 4,
+    .colorSpace = CGColorSpaceCreateDeviceGray(),
+    .bitmapInfo = kCGBitmapByteOrderDefault,
+    .version = 0,
+    .decode = nil,
+    .renderingIntent = kCGRenderingIntentDefault,
+};
+static const vImage_CGImageFormat r8Format = {
+    .bitsPerComponent = 8,
+    .bitsPerPixel = 8,
+    .colorSpace = CGColorSpaceCreateDeviceGray(),
+    .bitmapInfo = kCGBitmapByteOrderDefault,
+    .version = 0,
+    .decode = nil,
+    .renderingIntent = kCGRenderingIntentDefault,
+};
+static vImageConverterRef r4to8Converter = nullptr;
+
+static inline vImage_Buffer toVBuf(const RawDataRef &data, int width, int height, int row)
 {
-    NSData *data = [inImage rawDataScaleWidth:inWidth height:inHeight border:0];
-    if (!data)
-        return;
-    width = inWidth;  height = inHeight;
-    
-    if ((width == 0 || height == 0) && data)
-        NSLog(@"TextureMTL: Got textures with 0 width or height");
-    
-    texData = RawDataRef(new RawNSDataReader(data));
+    return {
+        .data     = (void*)data->getRawData(),
+        .height   = (vImagePixelCount)height,
+        .width    = (vImagePixelCount)width,
+        .rowBytes = (size_t)row
+    };
 }
 
-TextureMTL::TextureMTL(const std::string &name,UIImage *inImage)
-: Texture(name), TextureBase(name), TextureBaseMTL(name)
+static RawDataRef ConvertR4toR8(const RawDataRef &inData, int width, int height)
 {
-    NSData *data = [inImage rawDataRetWidth:&width height:&height roundUp:true];
-    if (!data)
-        return;
-    
-    if ((width == 0 || height == 0) && data)
-        NSLog(@"TextureMTL: Got textures with 0 width or height");
-    
-    texData = RawDataRef(new RawNSDataReader(data));
-}
+    constexpr vImage_Flags flags = kvImageNoFlags;  // kvImagePrintDiagnosticsToConsole
+    if (!r4to8Converter)
+    {
+        r4to8Converter = vImageConverter_CreateWithCGImageFormat(&r4Format, &r8Format, nil, flags, nil);
+        if (!r4to8Converter)
+        {
+            wkLogLevel(Warn, "vImageConverter_CreateWithCGImageFormat failed: %d");
+            return RawDataRef();
+        }
+    }
 
-TextureBaseMTL::~TextureBaseMTL()
-{
+    auto outData = std::make_shared<RawDataWrapper>(new uint8_t[width * height], width * height, /*free=*/true);
+
+    vImage_Buffer srcBuf = toVBuf(inData, width, height, (width + 1) / 2);
+    vImage_Buffer destBuf = toVBuf(outData, width, height, width);
+
+    const auto result = vImageConvert_AnyToAny(r4to8Converter, &srcBuf, &destBuf, nil, flags);
+    if (result != kvImageNoError)
+    {
+        wkLogLevel(Warn, "vImageConvert_AnyToAny failed: %d", result);
+        return RawDataRef();
+    }
+
+    return outData;
 }
 
 #if !TARGET_OS_MACCATALYST
@@ -83,7 +139,7 @@ static RawDataRef ConvertRGBA8888toRGB565(const RawDataRef &inData, int width, i
     srcBuff.height = height;
     srcBuff.rowBytes = 4*width;
 
-    NSMutableData *outData = [[NSMutableData alloc] initWithCapacity:width*height*2];
+    NSMutableData *outData = [[NSMutableData alloc] initWithLength:width*height*2];
     vImage_Buffer destBuff;
     destBuff.data = (void *)[outData bytes];
     destBuff.width = width;
@@ -106,7 +162,7 @@ static RawDataRef ConvertRGBA8888toRGBA5551(const RawDataRef &inData, int width,
     srcBuff.height = height;
     srcBuff.rowBytes = 4*width;
 
-    NSMutableData *outData = [[NSMutableData alloc] initWithCapacity:width*height*2];
+    NSMutableData *outData = [[NSMutableData alloc] initWithLength:width*height*2];
     vImage_Buffer destBuff;
     destBuff.data = (void *)[outData bytes];
     destBuff.width = width;
@@ -125,9 +181,16 @@ RawDataRef TextureMTL::convertData()
     switch (format)
     {
     case TexTypeUnsignedByte:
-    case TexTypeSingleChannel:
     case TexTypeSingleInt16:
+    case TexTypeSingleUInt16:
+    case TexTypeDoubleUInt16:
         // no conversion needed?
+        return texData;
+    case TexTypeSingleChannel:
+        if (texData && texData->getLen() * 2 ==  width * height)
+        {
+            return ConvertR4toR8(texData, width, height);
+        }
         return texData;
     case TexTypeDoubleChannel:
         return ConvertRGBATo16(texData,width,height,false);
@@ -182,9 +245,22 @@ bool TextureMTL::createInRenderer(const RenderSetupInfo *inSetupInfo)
         }
         return false;
     }
-    
+
+    if (rawDepth && texData && texData->getLen())
+    {
+        if (texData->getLen() != height * width * rawChannels * rawDepth / 8)
+        {
+            wkLogLevel(Warn, "Expected %d bytes for %d,%d texture data, got %d",
+                       height * width * rawChannels * rawDepth / 8, width, height, texData->getLen());
+        }
+        if (texData->getLen() < height * width * rawChannels * rawDepth / 8)
+        {
+            return false;
+        }
+    }
+
     MTLPixelFormat pixFormat;
-    int bytesPerRow = 0;
+    unsigned bytesPerRow = 0;
     
     // "Don't use the following pixel formats: r8Unorm_srgb, b5g6r5Unorm, a1bgr5Unorm, abgr4Unorm, bgr5A1Unorm, or any XR10 or YUV formats."
     // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
@@ -270,11 +346,19 @@ bool TextureMTL::createInRenderer(const RenderSetupInfo *inSetupInfo)
 #endif
             break;
         case TexTypeSingleChannel:
-            pixFormat = MTLPixelFormatA8Unorm;
+            switch (byteSource)
+            {
+                case WKSingleGreen:
+                case WKSingleBlue:
+                case WKSingleRed: pixFormat = MTLPixelFormatR8Unorm; break;
+                case WKSingleRGB:   // ?
+                case WKSingleAlpha: pixFormat = MTLPixelFormatA8Unorm; break;
+            }
             // Nudge up the size a bit
             bytesPerRow = width;
             break;
         case TexTypeDoubleChannel:
+            // Raw data will be converted from 4 to 2 8-bit channels
             pixFormat = MTLPixelFormatRG8Unorm;
             bytesPerRow = 2*width;
             break;
@@ -309,6 +393,14 @@ bool TextureMTL::createInRenderer(const RenderSetupInfo *inSetupInfo)
         case TexTypeSingleInt16:
             pixFormat = MTLPixelFormatR16Sint;
             bytesPerRow = 2*width;
+            break;
+        case TexTypeSingleUInt16:
+            pixFormat = MTLPixelFormatR16Unorm;
+            bytesPerRow = 2*width;
+            break;
+        case TexTypeDoubleUInt16:
+            pixFormat = MTLPixelFormatRG16Unorm;
+            bytesPerRow = 4*width;
             break;
         case TexTypeSingleUInt32:
             pixFormat = MTLPixelFormatR32Uint;
@@ -362,18 +454,31 @@ bool TextureMTL::createInRenderer(const RenderSetupInfo *inSetupInfo)
     }
 
     RenderSetupInfoMTL *setupInfo = (RenderSetupInfoMTL *)inSetupInfo;
-    const size_t size = bytesPerRow * height;
-    texBuf = setupInfo->heapManage.newTextureWithDescriptor(desc,size);
+    const unsigned expectedBytes = bytesPerRow * height;
+    texBuf = setupInfo->heapManage.newTextureWithDescriptor(desc, expectedBytes);
 
     if (!name.empty())
     {
-        [texBuf.tex setLabel:[NSString stringWithFormat:@"%s",name.c_str()]];
+        [texBuf.tex setLabel:[NSString stringWithUTF8String:name.c_str()]];
     }
 
     if (texBuf.tex && texData)
     {
         if (const auto convData = convertData())
         {
+            if (convData->getLen() != expectedBytes)
+            {
+                wkLogLevel(Warn, "Bad size for texture '%s' fmt %d: got %d expected %d",
+                           name.c_str(), format, (int)convData->getLen(), expectedBytes);
+                
+                // If it's smaller we might crash.  If it's larger it'll probably be visibly wrong
+                // which only helps find the problem.
+                if (convData->getLen() < expectedBytes)
+                {
+                    return false;
+                }
+            }
+
             MTLRegion region = MTLRegionMake2D(0,0,width,height);
             [texBuf.tex replaceRegion:region
                           mipmapLevel:0

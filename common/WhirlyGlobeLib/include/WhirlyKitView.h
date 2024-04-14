@@ -16,11 +16,14 @@
  *  limitations under the License.
  */
 
-#import <set>
-#import <mutex>
+#import "Platform.h"
 #import "WhirlyTypes.h"
 #import "WhirlyVector.h"
 #import "CoordSystem.h"
+
+#import <memory>
+#import <mutex>
+#import <set>
 
 namespace WhirlyKit
 {
@@ -31,14 +34,15 @@ class ViewState;
 typedef std::shared_ptr<ViewState> ViewStateRef;
 
 /// Watcher Callback
-class ViewWatcher
+struct ViewWatcher
 {
-public:
-    virtual ~ViewWatcher() { }
+    virtual ~ViewWatcher() = default;
+
     /// Called when the view changes position
     virtual void viewUpdated(View *view) = 0;
 };
-typedef std::set<ViewWatcher *> ViewWatcherSet;
+using ViewWatcherRef = std::shared_ptr<ViewWatcher>;
+using ViewWatcherWeakRef = std::weak_ptr<ViewWatcher>;
 
 struct ViewAnimationDelegate
 {
@@ -100,7 +104,7 @@ public:
     virtual Eigen::Vector3d eyePos() const;
     
     /// Put together one or more offset matrices to express wrapping
-    virtual void getOffsetMatrices(std::vector<Eigen::Matrix4d> &offsetMatrices,const WhirlyKit::Point2f &frameBufferSize,float bufferX) const;
+    virtual void getOffsetMatrices(Matrix4dVector &offsetMatrices,const WhirlyKit::Point2f &frameBufferSize,float bufferX) const;
 
     /// If we're wrapping, we may need a non-wrapped coordinate
     virtual WhirlyKit::Point2f unwrapCoordinate(const WhirlyKit::Point2f &pt) const;
@@ -112,14 +116,14 @@ public:
     //- (WhirlyKit::Ray3f)displaySpaceRayFromScreenPt:(WhirlyKit::Point2f)screenPt width:(float)frameWidth height:(float)frameHeight;
     
     /// Calculate a map scale
-    double currentMapScale(const WhirlyKit::Point2f &frameSize);
+    double currentMapScale(const WhirlyKit::Point2f &frameSize) const;
 
     /// Calculate the height for a given scale.  Probably for minVis/maxVis
-    double heightForMapScale(double scale,const WhirlyKit::Point2f &frameSize);
+    double heightForMapScale(double scale,const WhirlyKit::Point2f &frameSize) const;
 
     /// Calculate map zoom
-    double currentMapZoom(const WhirlyKit::Point2f &frameSize,double latitude);
-    
+    double currentMapZoom(const WhirlyKit::Point2f &frameSize,double latitude) const;
+
     /// Return the screen size in display coordinates
     virtual WhirlyKit::Point2d screenSizeInDisplayCoords(const WhirlyKit::Point2f &frameSize);
     
@@ -127,20 +131,89 @@ public:
     virtual ViewStateRef makeViewState(SceneRenderer *renderer) = 0;
 
     /// Add a watcher delegate.  Call this on the main thread.
-    virtual void addWatcher(ViewWatcher *delegate);
+    virtual void addWatcher(const ViewWatcherRef &);
     
-    /// Remove the given watcher delegate.  Call this on the main thread
-    virtual void removeWatcher(ViewWatcher *delegate);
+    /// Remove the given watcher delegate.  Call this on the main thread.
+    virtual void removeWatcher(const ViewWatcherRef &);
     
     /// Used by subclasses to notify all the watchers of updates
     virtual void runViewUpdates();
+
+    const CoordSystemDisplayAdapter *getCoordAdapter() const { return coordAdapter; }
+
+    void setFieldOfView(float fov);
+    float getFieldOfView() const { return fieldOfView; }
+
+    void setNearPlane(float near);
+    float getNearPlane() const { return nearPlane; }
+
+    void setFarPlane(float far);
+    float getFarPlane() const { return farPlane; }
+
+    void setPlanes(float near, float far);
+
+    void setContinuousZoom(bool cz) { continuousZoom = cz; }
+    bool getContinuousZoom() const { return continuousZoom; }
+
+    TimeInterval getLastChangedTime() const { return lastChangedTime; }
+
+    /// Indicates that the view is currently being panned
+    bool getIsPanning() const { return isPanning; }
+    void setIsPanning(bool b) { isPanning = b; }
+
+    /// Indicates that the view is currently being zoomed
+    bool getIsZooming() const { return isZooming; }
+    void setIsZooming(bool b) { isZooming = b; }
+
+    /// Indicates that the view is currently being rotated
+    bool getIsRotating() const { return isRotating; }
+    void setIsRotating(bool b) { isRotating = b; }
+
+    /// Indicates that the view is currently being tilted
+    bool getIsTilting() const { return isTilting; }
+    void setIsTilting(bool b) { isTilting = b; }
+
+    /// Indicates that the view is currently animating
+    bool getIsAnimating() const { return isAnimating; }
+    void setIsAnimating(bool b) { isAnimating = b; }
+
+    /// Indicates that the pan/zoom/animation is user-initiated
+    bool getUserMotion() const { return userMotion; }
+    void setUserMotion(bool b) { userMotion = b; }
+
+    /// Indicates that the view center was changed directly using the toolkit (other than setViewState) since the last frame
+    bool getHasMoved() const { return hasMoved; }
+    void setHasMoved(bool b) { hasMoved = b; }
+
+    /// Indicates that the view height was changed directly using the toolkit (other than setViewState) since the last frame
+    bool getHasZoomed() const { return hasZoomed; }
+    void setHasZoomed(bool b) { hasZoomed = b; }
+
+    /// Indicates that the view heading was changed directly using the toolkit (other than setViewState) since the last frame
+    bool getHasRotated() const { return hasRotated; }
+    void setHasRotated(bool b) { hasRotated = b; }
     
-    double fieldOfView = 0.0;
+    /// Indicates that the view heading was changed directly using the toolkit (other than setViewState) since the last frame
+    bool getHasTilted() const { return hasTilted; }
+    void setHasTilted(bool b) { hasRotated = b; }
+
+protected:
+    friend class ViewState;
+    void updateParams();
+
+    double getImagePlaneSize() const { return imagePlaneSize; }
+
+protected:
+    double fieldOfView = M_PI / 3;  // 60 degree field of view
     double imagePlaneSize = 0.0;
     double nearPlane = 0.001;
     double farPlane = 10.0;
+    
+    void removeWatcherLocked(const ViewWatcherRef &);
+    
+protected:
     Point2d centerOffset = { 0, 0 };
-    std::vector<Eigen::Matrix4d> offsetMatrices;
+    Matrix4dVector offsetMatrices;
     /// The last time the position was changed
     TimeInterval lastChangedTime = 0.0;
     /// Display adapter and coordinate system we're working in
@@ -148,8 +221,21 @@ public:
     /// If set, we'll scale the near and far clipping planes as we get closer
     bool continuousZoom = false;
     
+    bool isPanning = false;
+    bool isZooming = false;
+    bool isAnimating = false;
+    bool isRotating = false;
+    bool isTilting = false;
+    bool userMotion = false;
+    bool hasMoved = false;
+    bool hasZoomed = false;
+    bool hasRotated = false;
+    bool hasTilted = false;
+
     /// Called when positions are updated
-    ViewWatcherSet watchers;
+    // Can't use a set or unordered_set for things that can change, but there
+    // should never be huge numbers of watchers, or rapid adds/removes.
+    std::vector<ViewWatcherWeakRef> watchers;
     std::mutex watcherLock;
 };
     
@@ -190,7 +276,7 @@ public:
     void log();
     
     Eigen::Matrix4d modelMatrix,projMatrix;
-    std::vector<Eigen::Matrix4d> viewMatrices,invViewMatrices,fullMatrices,fullNormalMatrices,invFullMatrices;
+    Matrix4dVector viewMatrices,invViewMatrices,fullMatrices,fullNormalMatrices,invFullMatrices;
     Eigen::Matrix4d invModelMatrix,invProjMatrix;
     double fieldOfView;
     double imagePlaneSize;

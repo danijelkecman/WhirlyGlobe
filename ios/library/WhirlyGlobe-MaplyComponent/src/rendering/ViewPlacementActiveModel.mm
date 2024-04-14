@@ -19,6 +19,7 @@
 #import "ViewPlacementActiveModel.h"
 #import "MaplyView.h"
 #import "SceneRenderer.h"
+#import "WhirlyKitLog.h"
 
 using namespace Eigen;
 using namespace WhirlyKit;
@@ -34,7 +35,11 @@ ViewPlacementManager::ViewPlacementManager()
     
 ViewPlacementManager::~ViewPlacementManager()
 {
-    viewInstanceSet.clear();
+    try
+    {
+        viewInstanceSet.clear();
+    }
+    WK_STD_DTOR_CATCH()
 }
 
 void ViewPlacementManager::addView(GeoCoord loc,const Point2d &offset2,UIView *view,float minVis,float maxVis)
@@ -135,7 +140,7 @@ void ViewPlacementManager::updateLocations(RendererFrameInfo *frameInfo)
     const float margin = 0.1f;
     const Mbr frameMbr = frameInfo->sceneRenderer->getFramebufferBound(margin);
 
-    std::vector<Eigen::Matrix4d> modelAndViewMats; // modelAndViewNormalMats;
+    Matrix4dVector modelAndViewMats; // modelAndViewNormalMats;
     modelAndViewMats.reserve(frameInfo->offsetMatrices.size());
     for (const auto &mat : frameInfo->offsetMatrices)
     {

@@ -121,9 +121,26 @@ typedef void (__strong ^InitCompletionBlock)(void);
 /// If set, we'll call the interpreter on this queue
 @property (nonatomic,nullable,strong) dispatch_queue_t queue;
 
-/// Number of simulataneous tiles we'll parse
-/// This is really just a limit on the number of tiles we'lll parse concurrently to keep memory use under control
+/// Number of simultaneous tiles we'll parse
+/// This is really just a limit on the number of tiles we'll parse concurrently to keep memory use under control
 @property (nonatomic) unsigned int numSimultaneousTiles;
+
+/// Label for tracking
+@property (nonatomic, assign) NSString * _Nullable label;
+
+/**
+    Each sampling layer allocates a slot to keep track of continuous zoom levels.
+    Those are passed all the way through to the individual shaders.
+    Returns a negative value if the loader, controller, or scene is not set up.
+ */
+@property (nonatomic,readonly) int zoomSlot;
+
+/**
+    The level currently associated with this loader's zoom slot.
+    Returns a negative value if the loader, controller, or scene is not set up.
+ */
+@property (nonatomic,readonly) float zoomLevel;
+
 
 // True if the loader is not currently loading anything
 - (bool)isLoading;

@@ -20,19 +20,24 @@
 
 #import "QuadDisplayLayerNew.h"
 #import "LayerThread.h"
+#import "MaplyRenderController_private.h"
 
 using namespace WhirlyKit;
 
 @implementation WhirlyKitQuadDisplayLayerNew
 {
     QuadDisplayControllerNewRef controller;
+    __weak MaplyRenderController* renderControl;
 }
 
 - (nonnull)initWithController:(QuadDisplayControllerNewRef)inController
+                renderControl:(MaplyRenderController*)inRenderControl
 {
-    self = [super init];
-    controller = inController;
-
+    if ((self = [super init]))
+    {
+        controller = inController;
+        renderControl = inRenderControl;
+    }
     return self;
 }
 
@@ -49,9 +54,17 @@ using namespace WhirlyKit;
 - (void)startWithThread:(WhirlyKitLayerThread *)inLayerThread scene:(Scene *)inScene
 {
     _layerThread = inLayerThread;
-    
+
+    // Update on any view movement, but not on re-applying the same position.
+    // Note that this parameter is a double, but the value is later stored as a float.
+    constexpr double minDist = std::numeric_limits<float>::min();
+
     // We want view updates, but only every so often
-    [inLayerThread.viewWatcher addWatcherTarget:self selector:@selector(viewUpdate:) minTime:controller->getViewUpdatePeriod() minDist:0.0 maxLagTime:10.0];
+    [inLayerThread.viewWatcher addWatcherTarget:self
+                                       selector:@selector(viewUpdate:)
+                                        minTime:controller->getViewUpdatePeriod()
+                                        minDist:minDist
+                                     maxLagTime:10.0];
 
     controller->start();
 }
@@ -77,7 +90,32 @@ static const float DelayPeriod = 0.1;
     if (!controller || !controller->getViewState())
         return;
 
-    [self viewUpdate:[[WhirlyKitViewStateWrapper alloc] initWithViewState:controller->getViewState()]];
+    __strong MaplyRenderController *rc = renderControl;
+    try
+    {
+        [self viewUpdate:[[WhirlyKitViewStateWrapper alloc] initWithViewState:controller->getViewState()]];
+    }
+    catch (const std::exception &ex)
+    {
+        NSLog(@"Exception in QuadDisplayLayerNew.delayCheck: %s", ex.what());
+        [rc report:@"QuadDisplayLayerNew-DelayCheck"
+         exception:[[NSException alloc] initWithName:@"STL Exception"
+                                              reason:[NSString stringWithUTF8String:ex.what()]
+                                            userInfo:nil]];
+    }
+    catch (NSException *ex)
+    {
+        NSLog(@"Exception in QuadDisplayLayerNew.delayCheck: %@", ex.description);
+        [rc report:@"QuadDisplayLayerNew-DelayCheck" exception:ex];
+    }
+    catch (...)
+    {
+        NSLog(@"Exception in QuadDisplayLayerNew.delayCheck");
+        [rc report:@"QuadDisplayLayerNew-DelayCheck"
+         exception:[[NSException alloc] initWithName:@"C++ Exception"
+                                              reason:@"Unknown"
+                                            userInfo:nil]];
+    }
 }
 
 // Called periodically when the user moves, but not too often

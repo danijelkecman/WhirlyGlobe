@@ -2,7 +2,7 @@
 *  WhirlyGlobeLib
 *
 *  Created by Steve Gifford on 4/8/20.
-*  Copyright 2011-2022 mousebird consulting
+*  Copyright 2011-2023 mousebird consulting
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
@@ -441,14 +441,11 @@ MapboxRegexField MapboxTransText::textForZoom(double zoom)
 static constexpr size_t TypicalLayerCount = 500;
 
 MapboxVectorStyleSetImpl::MapboxVectorStyleSetImpl(Scene *inScene,
-                                                   CoordSystem *coordSys,
+                                                   const CoordSystem *coordSys,
                                                    VectorStyleSettingsImplRef settings) :
-    scene(inScene),
-    version(-1),
-    currentID(0),
     tileStyleSettings(std::move(settings)),
+    scene(inScene),
     coordSys(coordSys),
-    zoomSlot(-1),
     layersByName(TypicalLayerCount),
     layersByUUID(TypicalLayerCount),
     layersBySource(TypicalLayerCount)
@@ -487,9 +484,9 @@ MapboxVectorStyleSetImpl::MapboxVectorStyleSetImpl(Scene *inScene,
     if (prog)
         wideVectorProgramID = prog->getId();
 
-    if (const auto prog = scene->findProgramByName(MaplyWideVectorPerformanceShader))
+    if (const auto p = scene->findProgramByName(MaplyWideVectorPerformanceShader))
     {
-        wideVectorPerfProgramID = prog->getId();
+        wideVectorPerfProgramID = p->getId();
     }
 }
 
@@ -636,8 +633,15 @@ std::vector<DictionaryEntryRef> MapboxVectorStyleSetImpl::arrayValue(const std::
     
     if (thing->getType() == DictTypeArray)
         return thing->getArray();
-    
-    wkLogLevel(Warn, "Expected array for %s but got something else",inName.c_str());
+
+#if defined(DEBUG)
+    static bool warned = false;
+    if (!warned)
+    {
+        warned = true;
+        wkLogLevel(Warn, "Expected array for %s but got something else", inName.c_str());
+    }
+#endif
     return ret;
 }
 
@@ -914,7 +918,13 @@ void MapboxVectorStyleSetImpl::unsupportedCheck(const char *field,const char *wh
     if (styleEntry && styleEntry->hasField(field))
     {
 #if DEBUG
-        wkLogLevel(Warn,"Found unsupported field (%s) for (%s)",field,what);
+        static std::mutex mutex;
+        static std::set<std::string> warnedFields;
+        std::lock_guard<std::mutex> lock(mutex);
+        if (warnedFields.insert(std::string(field)+what).second)
+        {
+            wkLogLevel(Warn, "Found unsupported field (%s) for (%s)", field, what);
+        }
 #endif
     }
 }

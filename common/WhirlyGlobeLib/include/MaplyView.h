@@ -53,7 +53,7 @@ public:
     MapView(WhirlyKit::CoordSystemDisplayAdapter *coordAdapter);
     /// Copy constructor
     MapView(const MapView &that);
-    virtual ~MapView();
+    virtual ~MapView() = default;
 
     /// Calculate the Z buffer resolution
     virtual float calcZbufferRes() override;
@@ -71,7 +71,7 @@ public:
     virtual double heightAboveSurface() const override;
     
     /// Put together one or more offset matrices to express wrapping
-    virtual void getOffsetMatrices(std::vector<Eigen::Matrix4d> &offsetMatrices,const WhirlyKit::Point2f &frameBufferSize,float bufferX) const override;
+    virtual void getOffsetMatrices(WhirlyKit::Matrix4dVector &offsetMatrices,const WhirlyKit::Point2f &frameBufferSize,float bufferX) const override;
 
     /// Minimum valid height above plane
     virtual double minHeightAboveSurface() const override;

@@ -18,21 +18,24 @@
  *
  */
 
-#import "BillboardManager.h"
-#import "GeometryManager.h"
-#import "IntersectionManager.h"
-#import "LabelManager.h"
-#import "LayoutManager.h"
-#import "LoftManager.h"
-#import "MarkerManager.h"
-#import "ParticleSystemManager.h"
-#import "SceneGraphManager.h"
 #import "ShapeManager.h"
-#import "SphericalEarthChunkManager.h"
-#import "VectorManager.h"
-#import "VectorObject.h"
-#import "WideVectorManager.h"
-#import "SelectionManager.h"
+
+#if !MAPLY_MINIMAL
+# import "BillboardManager.h"
+# import "GeometryManager.h"
+# import "IntersectionManager.h"
+# import "LabelManager.h"
+# import "LayoutManager.h"
+# import "LoftManager.h"
+# import "MarkerManager.h"
+# import "ParticleSystemManager.h"
+# import "SceneGraphManager.h"
+# import "SphericalEarthChunkManager.h"
+# import "VectorManager.h"
+# import "VectorObject.h"
+# import "WideVectorManager.h"
+# import "SelectionManager.h"
+#endif //!MAPLY_MINIMAL
 
 namespace WhirlyKit
 {
@@ -62,7 +65,7 @@ public:
     // Vectors objects associated with this component object
     std::vector<VectorObjectRef> vecObjs;
     
-    Point2d vectorOffset;
+    Point2d vectorOffset = { 0, 0, };
     
     std::string uuid;
     std::string representation;
@@ -70,9 +73,9 @@ public:
     // If the object uses masks, these are the masks in use
     SimpleIDSet maskIDs;
 
-    bool isSelectable;
     bool enable;
-    bool underConstruction;
+    bool isSelectable;
+    bool underConstruction = false;
     
     // Empty out references
     void clear();
@@ -84,6 +87,7 @@ public:
 };
 
 typedef std::shared_ptr<ComponentObject> ComponentObjectRef;
+using ComponentObjectRefVec = std::vector<ComponentObjectRef>;
     
 typedef std::map<SimpleIdentity,ComponentObjectRef> ComponentObjectMap;
     
@@ -96,7 +100,7 @@ typedef std::map<SimpleIdentity,ComponentObjectRef> ComponentObjectMap;
 class ComponentManager : public SceneManager
 {
 public:
-    ComponentManager();
+    ComponentManager() = default;
     virtual ~ComponentManager() = default;
     
     // Called when the scene sets up the managers
@@ -186,17 +190,19 @@ public:
             const Point2f &frameSize,int resultLimit = 0);
 
     // These are here for convenience
+    ShapeManagerRef shapeManager;
+#if !MAPLY_MINIMAL
     LayoutManagerRef layoutManager;
     MarkerManagerRef markerManager;
     LabelManagerRef labelManager;
     VectorManagerRef vectorManager;
     WideVectorManagerRef wideVectorManager;
-    ShapeManagerRef shapeManager;
     SphericalChunkManagerRef chunkManager;
     LoftManagerRef loftManager;
     BillboardManagerRef billManager;
     GeometryManagerRef geomManager;
     ParticleSystemManagerRef partSysManager;
+#endif //!MAPLY_MINIMAL
 
 protected:
     // Subclass fills this in
@@ -229,7 +235,7 @@ protected:
     std::unordered_map<std::string,MaskEntryRef> maskEntriesByName;
     std::unordered_map<SimpleIdentity,MaskEntryRef> maskEntriesByID;
     // We have 32 bits of range in the mask ID on iOS
-    unsigned int lastMaskID;
+    unsigned int lastMaskID = 0;
     std::mutex maskLock;
 };
 typedef std::shared_ptr<ComponentManager> ComponentManagerRef;

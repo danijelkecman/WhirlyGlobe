@@ -171,16 +171,30 @@ struct Uniforms
     simd::float4x4 mvNormalMatrix;
     simd::float4x4 pMatrix;
     simd::float4x4 pMatrixDiff;
+    simd::float4x4 offsetMatrix;    // do we need double precision here?
+    simd::float4x4 offsetInvMatrix;
     simd::float3 eyePos;
     simd::float3 eyeVec;
     simd::float2 screenSizeInDisplayCoords;  // Size of the whole frame in display coords
-    simd::float2 frameSize;    // Output framebuffer size
+    simd::float2 frameSize;     // Output framebuffer size
     uint frameCount;            // Starts at zero and goes up from there every frame
-    int outputTexLevel;        // Normally 0, unless we're running a reduce
-    float currentTime;         // Current time relative to the start of the renderer
-    float height;              // Height above the ground/globe
+    uint offsetView;            // The current offset index
+    uint offsetViews;           // The number of offset views (0 if disabled)
+    int outputTexLevel;         // Normally 0, unless we're running a reduce
+    float currentTime;          // Current time relative to the start of the renderer
+    float height;               // Height above the ground/globe
     float zoomSlots[MaxZoomSlots];  // Zoom levels calculated by the sampling layers
-    bool globeMode;
+    bool globeMode;             // globe if true, flat map otherwise
+    bool isPanning;             // map is being panned
+    bool isZooming;             // map is being zoomed
+    bool isRotating;            // map is being rotated (around z, not y)
+    bool isTilting;             // globe is being tilted
+    bool isAnimating;           // position/height is being animated
+    bool userMotion;            // motion is user-initiated
+    bool didMove;               // Position set since last frame (not animated/user-initiated)
+    bool didZoom;               // Height set since last frame (not animated/user-initiated)
+    bool didRotate;             // Heading set since last frame (not animated/user-initiated)
+    bool didTilt;               // Tilt set since last frame (not animated/user-initiated)
 };
 
 // Things that change per drawable (like fade)

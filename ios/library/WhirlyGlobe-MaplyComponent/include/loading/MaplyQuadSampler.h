@@ -34,6 +34,10 @@
 /// The coordinate system we'll be sampling from.
 @property (nonatomic,nonnull,strong) MaplyCoordinateSystem *coordSys;
 
+/// The extent of valid coordinates for the tiles.
+/// Set automatically when assigning coordSys
+@property (nonatomic) MaplyBoundingBox coordBounds;
+
 /// Min zoom level for sampling.  Don't set this to anything other than 0 or 1
 @property (nonatomic) int minZoom;
 
@@ -82,6 +86,10 @@
 /// If set, the tiles are clipped to this boundary
 @property (nonatomic) MaplyBoundingBoxD clipBounds;
 @property (nonatomic,readonly) bool hasClipBounds;
+
+/// If set, we'll clip the tiles before we do importance calculations.
+/// This is off by default.  In many cases it would make really skinny tiles.  Use carefully
+@property (nonatomic) bool useClipBoundsForImportance;
 
 /**
  Detail the levels you want loaded in target level mode.

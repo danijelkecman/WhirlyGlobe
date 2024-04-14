@@ -2,7 +2,7 @@
  *  WhirlyGlobe-MaplyComponent
  *
  *  Created by Steve Gifford on 9/13/18.
- *  Copyright 2011-2022 mousebird consulting inc
+ *  Copyright 2011-2023 mousebird consulting inc
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -42,6 +42,13 @@ using namespace WhirlyKit;
                                cacheSize:(int)cacheSize
 {
     NSString *infoPath = nil;
+    
+    // fileExistsAtPath can't handle file URLs
+    if (NSURL* url = [NSURL URLWithString:mbTilesName])
+    {
+        mbTilesName = url.path;
+    }
+
     // See if that was a direct path first
     if ([[NSFileManager defaultManager] fileExistsAtPath:mbTilesName])
         infoPath = mbTilesName;

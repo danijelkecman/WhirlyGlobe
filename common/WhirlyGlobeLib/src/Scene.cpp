@@ -1,8 +1,8 @@
-/*  Scene.mm
+/*  Scene.cpp
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 1/3/11.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,21 +22,24 @@
 #import "GlobeMath.h"
 #import "TextureAtlas.h"
 #import "Platform.h"
-#import "FontTextureManager.h"
-#import "SelectionManager.h"
-#import "IntersectionManager.h"
-#import "LayoutManager.h"
-#import "ShapeManager.h"
-#import "MarkerManager.h"
-#import "LabelManager.h"
-#import "VectorManager.h"
-#import "WideVectorManager.h"
-#import "SphericalEarthChunkManager.h"
-#import "LoftManager.h"
-#import "ParticleSystemManager.h"
-#import "BillboardManager.h"
-#import "GeometryManager.h"
+
+#if !MAPLY_MINIMAL
+# import "FontTextureManager.h"
+# import "SelectionManager.h"
+# import "IntersectionManager.h"
+# import "LayoutManager.h"
+# import "MarkerManager.h"
+# import "LabelManager.h"
+# import "VectorManager.h"
+# import "WideVectorManager.h"
+# import "SphericalEarthChunkManager.h"
+# import "LoftManager.h"
+# import "ParticleSystemManager.h"
+# import "BillboardManager.h"
+# import "GeometryManager.h"
+#endif //!MAPLY_MINIMAL
 #import "ComponentManager.h"
+#import "ShapeManager.h"
 
 #if __clang_major__ >= 3
 #include <cxxabi.h>
@@ -77,22 +80,22 @@ void SceneManager::teardown()
 }
 
 Scene::Scene(CoordSystemDisplayAdapter *adapter) :
-    setupInfo(nullptr),
-    currentTime(0.0),
     coordAdapter(adapter),
-    overlapMargin(0.0),
     textures(100)
 {
     SetupDrawableStrings();
     
+#if !MAPLY_MINIMAL
     // Selection manager is used for object selection from any thread
     addManager(kWKSelectionManager,std::make_shared<SelectionManager>(this));
     // Intersection handling
     addManager(kWKIntersectionManager, std::make_shared<IntersectionManager>(this));
     // Layout manager handles text and icon layout
     addManager(kWKLayoutManager, std::make_shared<LayoutManager>());
+#endif //!MAPLY_MINIMAL
     // Shape manager handles circles, spheres and such
     addManager(kWKShapeManager, std::make_shared<ShapeManager>());
+#if !MAPLY_MINIMAL
     // Marker manager handles 2D and 3D markers
     addManager(kWKMarkerManager, std::make_shared<MarkerManager>());
     // Label manager handles 2D and 3D labels
@@ -111,6 +114,7 @@ Scene::Scene(CoordSystemDisplayAdapter *adapter) :
     addManager(kWKWideVectorManager, std::make_shared<WideVectorManager>());
     // Raw Geometry
     addManager(kWKGeometryManager, std::make_shared<GeometryManager>());
+#endif //!MAPLY_MINIMAL
     // Components (groups of things)
     addManager(kWKComponentManager, MakeComponentManager());
 
@@ -121,84 +125,94 @@ Scene::Scene(CoordSystemDisplayAdapter *adapter) :
 
 Scene::~Scene()
 {
+    try
+    {
 //    wkLogLevel(Verbose,"Shutting down scene");
 
 #if DEBUG
-    const std::unique_lock<std::mutex> locks[] = {
-            std::unique_lock<std::mutex>(coordAdapterLock, std::try_to_lock),
-            std::unique_lock<std::mutex>(drawablesLock, std::try_to_lock),
-            std::unique_lock<std::mutex>(textureLock, std::try_to_lock),
-            std::unique_lock<std::mutex>(changeRequestLock, std::try_to_lock),
-            std::unique_lock<std::mutex>(subTexLock, std::try_to_lock),
-            std::unique_lock<std::mutex>(managerLock, std::try_to_lock),
-            std::unique_lock<std::mutex>(programLock, std::try_to_lock),
-            std::unique_lock<std::mutex>(zoomSlotLock, std::try_to_lock),
-    };
-    const auto lockCount = sizeof(locks)/sizeof(locks[0]);
-    if (!std::all_of(&locks[0],&locks[lockCount],[](const auto &l){return l.owns_lock();}))
-    {
-        assert(!"Scene destroyed while locked");
-    }
-#endif
-
-    textures.clear();
-
-    for (auto &manager : managers)
-    {
-        manager.second->setScene(nullptr);
-    }
-
-#if DEBUG
-    std::vector<std::weak_ptr<SceneManager>> wm(managers.size());
-    std::transform(managers.begin(), managers.end(), wm.begin(), [](auto p){ return p.second; });
-#endif
-    managers.clear();
-
-#if DEBUG
-    wm.erase(std::remove_if(wm.begin(), wm.end(), [](auto p){ return !p.lock(); }), wm.end());
-    for (const auto &w : wm)
-    {
-        if (const auto p = w.lock())
+        const std::unique_lock<std::mutex> locks[] = {
+                std::unique_lock<std::mutex>(coordAdapterLock, std::try_to_lock),
+                std::unique_lock<std::mutex>(drawablesLock, std::try_to_lock),
+                std::unique_lock<std::mutex>(textureLock, std::try_to_lock),
+                std::unique_lock<std::mutex>(changeRequestLock, std::try_to_lock),
+                std::unique_lock<std::mutex>(subTexLock, std::try_to_lock),
+                std::unique_lock<std::mutex>(managerLock, std::try_to_lock),
+                std::unique_lock<std::mutex>(programLock, std::try_to_lock),
+                std::unique_lock<std::mutex>(zoomSlotLock, std::try_to_lock),
+        };
+        const auto lockCount = sizeof(locks)/sizeof(locks[0]);
+        if (!std::all_of(&locks[0],&locks[lockCount],[](const auto &l){return l.owns_lock();}))
         {
-            const auto &ref = *p;
-            const auto name = typeid(ref).name();
-            int32_t status = 0;
-            size_t len = 256;
-            std::vector<char> buf(len + 1);
-#if __clang_major__ >= 3
-            abi::__cxa_demangle(name, &buf[0], &len, &status);
-#endif
-            wkLogLevel(Warn, "Scene Manager live after scene destroyed: '%s' (%s)", &buf[0], name);
+            assert(!"Scene destroyed while locked");
         }
-    }
 #endif
 
-    auto theChangeRequests = std::move(changeRequests);
-    for (auto *theChangeRequest : theChangeRequests)
-    {
-        delete theChangeRequest;
+        textures.clear();
+
+        for (auto &manager : managers)
+        {
+            manager.second->setScene(nullptr);
+        }
+
+#if DEBUG
+        std::vector<std::weak_ptr<SceneManager>> wm(managers.size());
+        std::transform(managers.begin(), managers.end(), wm.begin(), [](auto p){ return p.second; });
+#endif
+        managers.clear();
+
+#if DEBUG
+        wm.erase(std::remove_if(wm.begin(), wm.end(), [](auto p){ return !p.lock(); }), wm.end());
+        for (const auto &w : wm)
+        {
+            if (const auto p = w.lock())
+            {
+                const auto &ref = *p;
+                const auto name = typeid(ref).name();
+                int32_t status = 0;
+                size_t len = 256;
+                std::vector<char> buf(len + 1);
+# if __clang_major__ >= 3
+                abi::__cxa_demangle(name, &buf[0], &len, &status);
+# endif
+                wkLogLevel(Warn, "Scene Manager live after scene destroyed: '%s' (%s)", &buf[0], name);
+            }
+        }
+#endif
+
+        auto theChangeRequests = std::move(changeRequests);
+        for (auto *theChangeRequest : theChangeRequests)
+        {
+            if (theChangeRequest)
+            {
+                theChangeRequest->cancel();
+            }
+            delete theChangeRequest;
+        }
+        theChangeRequests.clear();
+
+        for (auto *theChangeRequest : timedChangeRequests)
+        {
+            delete theChangeRequest;
+        }
+        timedChangeRequests.clear();
+
+        activeModels.clear();
+        
+        subTextureMap.clear();
+
+        programs.clear();
+
+#if !MAPLY_MINIMAL
+        if (fontTextureManager)
+        {
+            ChangeSet changes;
+            fontTextureManager->clear(changes);
+            discardChanges(changes);
+            fontTextureManager.reset();
+        }
+#endif //!MAPLY_MINIMAL
     }
-    theChangeRequests.clear();
-
-    for (auto *theChangeRequest : timedChangeRequests)
-    {
-        delete theChangeRequest;
-    }
-    timedChangeRequests.clear();
-
-    activeModels.clear();
-    
-    subTextureMap.clear();
-
-    programs.clear();
-
-    if (fontTextureManager)
-    {
-        ChangeSet changes;
-        fontTextureManager->clear(changes);
-        discardChanges(changes);
-        fontTextureManager.reset();
-    }
+    WK_STD_DTOR_CATCH()
 }
 
 void Scene::teardown(PlatformThreadInfo* env)
@@ -209,10 +223,12 @@ void Scene::teardown(PlatformThreadInfo* env)
         {
             manager.second->teardown();
         }
+#if !MAPLY_MINIMAL
         if (fontTextureManager)
         {
             fontTextureManager->teardown(env);
         }
+#endif //!MAPLY_MINIMAL
     }
     setRenderer(nullptr);
 }
@@ -345,7 +361,10 @@ void Scene::removeActiveModel(PlatformThreadInfo *threadInfo, const ActiveModelR
     }
     if (which < activeModels.size()) {
         activeModels.erase(activeModels.begin() + which);
-        activeModel->teardown(threadInfo);
+        if (activeModel)
+        {
+            activeModel->teardown(threadInfo);
+        }
     }
 }
 
@@ -604,11 +623,13 @@ void Scene::dumpStats() const
     wkLogLevel(Verbose,"Scene: %ld textures",textures.size());
     wkLogLevel(Verbose,"Scene: %ld sub textures",subTextureMap.size());
 }
-    
+
+#if !MAPLY_MINIMAL
 void Scene::setFontTextureManager(const FontTextureManagerRef &newManager)
 {
     fontTextureManager = newManager;
 }
+#endif //!MAPLY_MINIMAL
 
 Program *Scene::getProgram(SimpleIdentity progId)
 {
@@ -733,16 +754,6 @@ void AddTextureReq::setupForRenderer(const RenderSetupInfo *setupInfo,Scene *sce
         texRef->createInRenderer(setupInfo);
 }
     
-TextureBase *AddTextureReq::getTex() const
-{
-    return texRef.get();
-}
-    
-AddTextureReq::~AddTextureReq()
-{
-    texRef = nullptr;
-}
-    
 void AddTextureReq::execute(Scene *scene,SceneRenderer *renderer,WhirlyKit::View *view)
 {
     texRef->createInRenderer(renderer->getRenderSetupInfo());
@@ -760,7 +771,8 @@ void RemTextureReq::execute(Scene *scene,SceneRenderer *renderer,WhirlyKit::View
             info->destroyTexture(renderer,tex);
         }
         scene->removeTexture(texture);
-    } else
+    }
+    else
     {
         wkLogLevel(Warn,"RemTextureReq: No such texture.");
     }
@@ -774,11 +786,6 @@ void AddDrawableReq::setupForRenderer(const RenderSetupInfo *setupInfo,Scene *sc
         // Add it to the scene, even if we're on another thread
         scene->addDrawable(drawRef);
     }
-}
-
-AddDrawableReq::~AddDrawableReq()
-{
-    drawRef = nullptr;
 }
 
 void AddDrawableReq::execute(Scene *scene,SceneRenderer *renderer,WhirlyKit::View *view)

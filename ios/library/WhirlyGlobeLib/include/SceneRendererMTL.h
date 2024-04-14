@@ -39,6 +39,8 @@
 
 @end
 
+@class MaplyRenderController;
+
 namespace WhirlyKit
 {
 
@@ -93,7 +95,8 @@ class WorkGroupMTL : public WorkGroup
 {
 public:
     WorkGroupMTL(GroupType groupType);
-    virtual ~WorkGroupMTL();
+    WorkGroupMTL(GroupType groupType, std::string name);
+    virtual ~WorkGroupMTL() = default;
     
 protected:
     virtual RenderTargetContainerRef makeRenderTargetContainer(RenderTargetRef renderTarget);
@@ -103,7 +106,7 @@ protected:
 class SceneRendererMTL : public SceneRenderer
 {
 public:
-    SceneRendererMTL(id<MTLDevice> mtlDevice,id<MTLLibrary> mtlLibrary,float scale);
+    SceneRendererMTL(MaplyRenderController *,id<MTLDevice> mtlDevice,id<MTLLibrary> mtlLibrary,float scale);
     virtual ~SceneRendererMTL();
     
     // Metal (obviously)
@@ -119,10 +122,16 @@ public:
     bool setup(int sizeX,int sizeY,bool offscreen);
     
     /// Resize framebuffer because something changed
-    virtual bool resize(int sizeX,int sizeY);
-    
+    virtual bool resize(int sizeX,int sizeY) override;
+
+    struct RenderInfoMTL : public RenderInfo
+    {
+        MTLRenderPassDescriptor *renderPassDesc;
+        id<SceneRendererMTLDrawableGetter> drawGetter;
+    };
+
     /// Draw stuff (the whole point!)
-    void render(TimeInterval period,MTLRenderPassDescriptor *renderPassDesc,id<SceneRendererMTLDrawableGetter> drawGetter);
+    virtual void render(TimeInterval period, RenderInfo *) override;
     
     /// Set the clear color we're using
     virtual void setClearColor(const RGBAColor &color) override;
@@ -136,7 +145,7 @@ public:
     virtual RendererFrameInfoRef getFrameInfo() override { return lastFrameInfo; }
 
     /// Move things around as required by outside updates
-    virtual void updateWorkGroups(RendererFrameInfo *frameInfo) override;
+    virtual void updateWorkGroups(RendererFrameInfo *frameInfo,int numViewOffsets) override;
 
     /// Construct a basic drawable builder for the appropriate rendering type
     virtual BasicDrawableBuilderRef makeBasicDrawableBuilder(const std::string &name) const override;
@@ -163,7 +172,7 @@ public:
     virtual DynamicTextureRef makeDynamicTexture(const std::string &name) const override;
     
     /// Set up the buffer for general uniforms and attach it to its vertex/fragment buffers
-    void setupUniformBuffer(RendererFrameInfoMTL *frameInfo, id<MTLBlitCommandEncoder> bltEncode,CoordSystemDisplayAdapter *coordAdapter);
+    void setupUniformBuffer(RendererFrameInfoMTL *frameInfo, int offset, id<MTLBlitCommandEncoder> bltEncode,CoordSystemDisplayAdapter *coordAdapter);
 
     /// Set the lights and tie them to a vertex buffer index
     void setupLightBuffer(SceneMTL *scene,RendererFrameInfoMTL *frameInfo,id<MTLBlitCommandEncoder> bltEncode);
@@ -191,6 +200,8 @@ public:
 protected:
     RendererFrameInfoMTLRef makeFrameInfo();
 
+    void tryRender(TimeInterval duration, RenderInfo *);
+
 public:
     RenderTargetMTLRef getRenderTarget(SimpleIdentity renderTargetID);
     id<MTLCommandBuffer> lastCmdBuff;
@@ -205,7 +216,9 @@ public:
     dispatch_queue_t releaseQueue;
 
     id<MTLCommandQueue> cmdQueue;
+    id<MTLCaptureScope> cmdCaptureScope;
 
+    int lastNumViewOffsets = -1;
     // This keeps us from stomping on the previous frame's uniforms
     int lastRenderNo;
     id<MTLEvent> renderEvent;
@@ -213,6 +226,8 @@ public:
 private:
     RendererFrameInfoRef lastFrameInfo;
     const std::shared_ptr<bool> _isShuttingDown;
+    __weak MaplyRenderController *renderControl;
+    bool failed = false;
 };
     
 typedef std::shared_ptr<SceneRendererMTL> SceneRendererMTLRef;

@@ -19,8 +19,6 @@
 #import <UIKit/UIKit.h>
 #import <Metal/Metal.h>
 #import <WhirlyGlobe/MaplyCoordinate.h>
-#import <WhirlyGlobe/MaplyScreenMarker.h>
-#import <WhirlyGlobe/MaplyVectorObject.h>
 #import <WhirlyGlobe/MaplyViewTracker.h>
 #import <WhirlyGlobe/MaplyComponentObject.h>
 #import <WhirlyGlobe/MaplySharedAttributes.h>
@@ -29,9 +27,11 @@
 #import <WhirlyGlobe/MaplyShader.h>
 #import <WhirlyGlobe/MaplyActiveObject.h>
 #import <WhirlyGlobe/MaplyTexture.h>
+#import <WhirlyGlobe/MaplyPoints.h>
+#import <WhirlyGlobe/MaplyScreenMarker.h>
+#import <WhirlyGlobe/MaplyVectorObject.h>
 #import <WhirlyGlobe/MaplyAnnotation.h>
 #import <WhirlyGlobe/MaplyParticleSystem.h>
-#import <WhirlyGlobe/MaplyPoints.h>
 #import <WhirlyGlobe/MaplyCluster.h>
 #import <WhirlyGlobe/Maply3DTouchPreviewDatasource.h>
 #import <WhirlyGlobe/MaplyLocationTracker.h>
@@ -39,6 +39,10 @@
 #import <WhirlyGlobe/MaplyRenderController.h>
 #import <WhirlyGlobe/MaplyRemoteTileFetcher.h>
 #import <WhirlyGlobe/MaplyVertexAttribute.h>
+
+#if !MAPLY_MINIMAL
+#endif //!MAPLY_MINIMAL
+
 
 typedef double (^ZoomEasingBlock)(double z0,double z1,double t);
 typedef void (__strong ^InitCompletionBlock)(void);
@@ -94,6 +98,8 @@ typedef void (__strong ^InitCompletionBlock)(void);
 
 
 @protocol MaplyLocationTrackerDelegate;
+
+@protocol MaplyErrorReportingDelegate;
 
 /** 
     Base class for the Maply and WhirlyGlobe view controllers.
@@ -854,6 +860,21 @@ typedef void (__strong ^InitCompletionBlock)(void);
   */
 - (void)addAnnotation:(MaplyAnnotation *__nonnull)annotate forPoint:(MaplyCoordinate)coord offset:(CGPoint)offset;
 
+/**
+ Add a single annotation which will track the given point.
+ 
+ This adds a MaplyAnnotation that will follow the given geo coordinate, applying the screen offset as given.
+ 
+ @param annotate The annotation we want to track a given point.
+ 
+ @param coord The location on the map (or globe) we'd like to track.
+ 
+ @param offset The screen offset for the annotation UIView.  You use this to put the annotation above or below objects.
+ 
+ @param arrowDirection Arrow direction from the SMCalloutView package.
+ */
+- (void)addAnnotation:(MaplyAnnotation *__nonnull)annotate forPoint:(MaplyCoordinate)coord offset:(CGPoint)offset arrowDirection:(NSInteger)arrowDirection;
+
 /** 
     Remove the given annotation from the UIView.
     
@@ -1276,6 +1297,17 @@ typedef void (__strong ^InitCompletionBlock)(void);
 /// Remove all the user created MaplyControllerLayer objects from the globe or map.
 - (void)removeAllLayers;
 
+
+/// Find or create  a tile fetcher we may share between loaders
+- (MaplyRemoteTileFetcher * __nullable)addTileFetcher:(NSString * __nonnull)name;
+
+/// Find or create  a tile fetcher we may share between loaders
+- (MaplyRemoteTileFetcher * __nullable)addTileFetcher:(NSString * __nonnull)name
+                                   withMaxConnections:(int)maxConnections;
+
+/// Return a tile fetcher we may share between loaders
+- (MaplyRemoteTileFetcher * __nullable)getTileFetcher:(NSString * __nonnull)name;
+
 /** 
     Utility routine to convert from a lat/lon (in radians) to display coordinates
     
@@ -1480,11 +1512,17 @@ typedef void (__strong ^InitCompletionBlock)(void);
  */
 - (NSArray * _Nullable)labelsAndMarkersAtCoord:(MaplyCoordinate)coord;
 
+/// The default max number of connections per fetcher
+@property (nonatomic) int tileFetcherConnections;
+
 /// Turn on/off performance output (goes to the log periodically).
 @property (nonatomic,assign) bool performanceOutput;
 
 /// Turn on/off debug outlines for layout objects
 @property (nonatomic,assign) bool showDebugLayoutBoundaries;
+
+/// Set a delegate for error reporting
+@property (nonatomic,assign) NSObject<MaplyErrorReportingDelegate> * __nullable errorReportingDelegate;
 
 /** 
     See derived class method.
@@ -1587,5 +1625,13 @@ typedef void (__strong ^InitCompletionBlock)(void);
 
 /// Release a zoom slot previously retained
 - (void)releaseZoomSlotIndex:(int)index;
+
+/**
+ By default most gestures will wait patiently for other gestures to complete.  This lets you attach your own custom gestures
+ successfully.  But if you don't have your own gestures there's a lot of waiting.
+ If this mode is set, we short wait times and ignore what other gestures might want.  It's much faster interaction.
+ This can only be modified before the controller initializes.
+ */
+@property(nonatomic,assign) bool fastGestures;
 
 @end

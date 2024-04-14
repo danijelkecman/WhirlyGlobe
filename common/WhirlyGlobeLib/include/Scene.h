@@ -1,5 +1,4 @@
-/*
- *  Scene.h
+/*  Scene.h
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 1/3/11.
@@ -15,18 +14,18 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- *
  */
 
-#import <vector>
-#import <set>
-#import <unordered_map>
 #import "WhirlyVector.h"
 #import "Texture.h"
 #import "Program.h"
 #import "BasicDrawableInstance.h"
 #import "ActiveModel.h"
 #import "CoordSystem.h"
+
+#import <vector>
+#import <set>
+#import <unordered_map>
 
 namespace WhirlyKit
 {
@@ -35,10 +34,14 @@ namespace WhirlyKit
     
 class SceneRenderer;
 class Scene;
-class SubTexture;
+struct SubTexture;
+struct RenderSetupInfo;
+
+#if !MAPLY_MINIMAL
 class FontTextureManager;
 typedef std::shared_ptr<FontTextureManager> FontTextureManagerRef;
-class RenderSetupInfo;
+#endif //!MAPLY_MINIMAL
+
 
 /// Request that the renderer add the given texture.
 /// This will make it available for use, referenced by ID.
@@ -48,12 +51,12 @@ public:
     /// Construct with a texture.
     /// You are not responsible for deleting the texture after this.
     AddTextureReq(TextureBase *tex) { texRef = TextureBaseRef(tex); }
-    AddTextureReq(const TextureBaseRef &texRef) : texRef(texRef) { }
+    AddTextureReq(TextureBaseRef texRef) : texRef(std::move(texRef)) { }
     /// If the texture hasn't been added to the renderer, clean it up.
-    virtual ~AddTextureReq();
+    virtual ~AddTextureReq() = default;
 
     /// Texture creation generally wants a flush
-    virtual bool needsFlush() { return true; }
+    virtual bool needsFlush() const { return true; }
     
     /// Create the texture on its native thread
     virtual void setupForRenderer(const RenderSetupInfo *setupInfo,Scene *scene);
@@ -62,7 +65,7 @@ public:
 	void execute(Scene *scene,SceneRenderer *renderer,View *view);
 	
     /// Only use this if you've thought it out
-    TextureBase *getTex() const;
+    TextureBase *getTex() const { return texRef.get(); }
 
 protected:
     TextureBaseRef texRef;
@@ -91,12 +94,12 @@ public:
     /// Construct with a drawable.  You're not responsible for deletion
 	AddDrawableReq(Drawable *drawable) : drawRef(drawable) { }
     /// Passing by ref means don't worry about it
-    AddDrawableReq(const DrawableRef &drawRef) : drawRef(drawRef) { }
+    AddDrawableReq(DrawableRef drawRef) : drawRef(std::move(drawRef)) { }
     /// If the drawable wasn't used, delete it
-    virtual ~AddDrawableReq();
+    virtual ~AddDrawableReq() = default;
     
     /// Drawable creation generally wants a flush
-    virtual bool needsFlush() { return true; }
+    virtual bool needsFlush() const { return true; }
     
     /// Create the drawable on its native thread
     virtual void setupForRenderer(const RenderSetupInfo *,Scene *scene);
@@ -431,23 +434,27 @@ public:
     /// Return the number of change requests
     int getNumChangeRequests() const;
 
+#if !MAPLY_MINIMAL
+
     /// Set up the font texture manager.  Don't call this yourself.
     void setFontTextureManager(const FontTextureManagerRef &newManager);
 
     /// Returns the font texture manager, which is thread safe
     FontTextureManagerRef getFontTextureManager() const { return fontTextureManager; }
 
+#endif //!MAPLY_MINIMAL
+
 protected:
     /// Don't be calling this
     void setDisplayAdapter(CoordSystemDisplayAdapter *newCoordAdapter);
     
     /// Passed around to setup and teardown renderer assets
-    const RenderSetupInfo *setupInfo;
+    const RenderSetupInfo *setupInfo = nullptr;
 
     mutable std::mutex coordAdapterLock;
     /// The coordinate system display adapter converts from the local space
     ///  to display coordinates.
-    CoordSystemDisplayAdapter *coordAdapter;
+    CoordSystemDisplayAdapter *coordAdapter = nullptr;
                 
     /// All the active models
     std::vector<ActiveModelRef> activeModels;
@@ -485,25 +492,28 @@ protected:
 
     // Sampling layers will set these to talk to shaders
     mutable std::mutex zoomSlotLock;
-    float zoomSlots[MaplyMaxZoomSlots] = {};
+    float zoomSlots[MaplyMaxZoomSlots] = { 0.0f };
 
 protected:
     
     // If time is being set externally
-    TimeInterval currentTime;
+    TimeInterval currentTime = 0.0;
     // Time at initialization
-    TimeInterval baseTime;
+    TimeInterval baseTime = 0.0;
 
     /// All the OpenGL ES 2.0 shader programs we know about
     ProgramSet programs;
     
     /// Used for 2D overlap testing
-    double overlapMargin;
+    double overlapMargin = 0.0;
     
+#if !MAPLY_MINIMAL
     // The font texture manager is created at startup
     FontTextureManagerRef fontTextureManager;
+#endif //!MAPLY_MINIMAL
 
-    SceneRenderer* renderer;
+    SceneRenderer* renderer = nullptr;
 };
+using SceneRef = std::shared_ptr<Scene>;
 
 }

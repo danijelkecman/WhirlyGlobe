@@ -33,6 +33,13 @@
 #import <WhirlyGlobe/MaplyActiveObject.h>
 #import <WhirlyGlobe/MaplyControllerLayer.h>
 
+#if defined(__cplusplus)
+namespace WhirlyKit
+{
+    struct ShapeInfo;
+}
+#endif //defined(__cplusplus)
+
 @class MaplyRemoteTileFetcher;
 
 /// Where we'd like an add to be executed.  If you need immediate feedback,
@@ -55,8 +62,18 @@ typedef NS_ENUM(NSInteger, MaplyQuadImageFormat) {
     MaplyImageEACR11,MaplyImageEACR11S,MaplyImageEACRG11,MaplyImageEACRG11S,
     MaplyImage4Layer8Bit,
     // Metal only
-    MaplyImageSingleFloat16,MaplyImageSingleFloat32,MaplyImageDoubleFloat16,MaplyImageDoubleFloat32,MaplyImageQuadFloat16,MaplyImageQuadFloat32,
-    MaplyImageInt16,MaplyImageUInt32,MaplyImageDoubleUInt32,MaplyImageQuadUInt32
+    MaplyImageSingleFloat16,
+    MaplyImageSingleFloat32,
+    MaplyImageDoubleFloat16,
+    MaplyImageDoubleFloat32,
+    MaplyImageQuadFloat16,
+    MaplyImageQuadFloat32,
+    MaplyImageInt16,
+    MaplyImageUInt16,
+    MaplyImageDoubleUInt16,
+    MaplyImageUInt32,
+    MaplyImageDoubleUInt32,
+    MaplyImageQuadUInt32
 };
 
 /// Wrap values for certain types of textures
@@ -73,6 +90,19 @@ typedef NS_ENUM(NSInteger, MaplyRenderType) {
     MaplyRenderUnknown
 };
 
+@protocol MaplyRenderControllerProtocol;
+
+@protocol MaplyErrorReportingDelegate
+@optional
+- (void)onError:(NSError * __nonnull)err
+        withTag:(NSString * __nonnull)tag
+          viewC:(NSObject<MaplyRenderControllerProtocol> * __nonnull)viewC;
+- (void)onException:(NSException * __nonnull)err
+            withTag:(NSString * __nonnull)tag
+              viewC:(NSObject<MaplyRenderControllerProtocol> * __nonnull)viewC;
+@end
+
+
 /**
     Render Controller Protocol defines the methods required of a render controller.
  
@@ -88,6 +118,9 @@ typedef NS_ENUM(NSInteger, MaplyRenderType) {
  If you set this to 0, you can control the ordering of everything more precisely.
  */
 @property (nonatomic,assign) int screenObjectDrawPriorityOffset;
+
+/// Set a delegate for error reporting
+@property (nonatomic, weak) NSObject<MaplyErrorReportingDelegate> * __nullable errorReportingDelegate;
 
 /**
  Clear all the currently active lights.
@@ -496,6 +529,10 @@ typedef NS_ENUM(NSInteger, MaplyRenderType) {
  @return Returns a MaplyComponentObject, which can be used to make modifications or delete the objects created.
  */
 - (MaplyComponentObject *__nullable)addShapes:(NSArray *__nonnull)shapes desc:(NSDictionary *__nullable)desc mode:(MaplyThreadMode)threadMode;
+
+#if defined(__cplusplus)
+- (MaplyComponentObject *__nullable)addShapes:(NSArray *__nonnull)shapes info:(WhirlyKit::ShapeInfo &)shapeInfo desc:(NSDictionary *__nullable)desc mode:(MaplyThreadMode)threadMode;
+#endif
 
 /**
  Add one or more MaplySticker objects to the current scene.
@@ -961,7 +998,7 @@ typedef NS_ENUM(NSInteger, MaplyRenderType) {
 /**
     Add a MaplyControllerLayer to the globe or map.
     
-    At present, layers are for paged geometry such as image tiles or vector tiles.  You can create someting like a MaplyQuadImageTilesLayer, set it up and then hand it to addLayer: to add to the scene.
+    At present, layers are for paged geometry such as image tiles or vector tiles.  You can create something like a MaplyQuadImageTilesLayer, set it up and then hand it to addLayer: to add to the scene.
   */
 - (bool)addLayer:(MaplyControllerLayer *__nonnull)layer;
 
@@ -976,6 +1013,13 @@ typedef NS_ENUM(NSInteger, MaplyRenderType) {
 
 /// Return a tile fetcher we may share between loaders
 - (MaplyRemoteTileFetcher * __nullable)addTileFetcher:(NSString * __nonnull)name;
+
+/// Return a tile fetcher we may share between loaders
+- (MaplyRemoteTileFetcher * __nullable)addTileFetcher:(NSString * __nonnull)name
+                                   withMaxConnections:(int)maxConnections;
+
+/// Get an existing tile fetcher by name, but don't create a new one
+- (MaplyRemoteTileFetcher * __nullable)getTileFetcher:(NSString * __nonnull)name;
 
 /**
     If in Metal rendering mode, return the Metal device being used.
@@ -992,6 +1036,10 @@ typedef NS_ENUM(NSInteger, MaplyRenderType) {
  */
 - (void)teardown;
 
+@optional
+- (void)report:(NSString * __nonnull)tag error:(NSError * __nonnull)error;
+- (void)report:(NSString * __nonnull)tag exception:(NSException * __nonnull)error;
+
 @end
 
 /**
@@ -1001,11 +1049,23 @@ typedef NS_ENUM(NSInteger, MaplyRenderType) {
  */
 @interface MaplyRenderController : NSObject<MaplyRenderControllerProtocol>
 
+/// The time on which offsets are based
+@property (nonatomic, readonly) double baseTime;
+
+/// The default max number of connections per fetcher
+@property (nonatomic) int tileFetcherConnections;
+
 /// Initialize as an offline renderer of a given target size of the given rendering type
 - (instancetype __nullable)initWithSize:(CGSize)size mode:(MaplyRenderType)renderType;
 
 /// Initialize as an offline renderer of a given target size with default renderer (Metal)
 - (instancetype __nullable)initWithSize:(CGSize)size;
+
+/// Initialize as an offline renderer with a map view
+- (instancetype __nullable)initWithSize:(CGSize)size mode:(MaplyRenderType)renderType mapView:(int)mapView;
+
+/// Set center and height.  No bounds checking.
+- (void)setPosition:(MaplyCoordinate)newPos height:(float)height;
 
 /// If set up in offline mode, this is how we draw
 - (UIImage * __nullable)renderToImage;

@@ -2,7 +2,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 7/6/15.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -134,15 +134,16 @@ Vector4f ColorExpressionInfo::evaluateF(float zoom, RGBAColor def)
     return evalExpr<RGBAColor,Vector4f>(zoom,base,def,stopInputs,stopOutputs,toVec,lerpVec);
 }
 
-BaseInfo::BaseInfo(const BaseInfo &that)
-: minVis(that.minVis), maxVis(that.minVis), minVisBand(that.minVisBand), maxVisBand(that.maxVisBand),
-  minViewerDist(that.minViewerDist), maxViewerDist(that.maxViewerDist), zoomSlot(that.zoomSlot),
-  minZoomVis(that.minZoomVis),maxZoomVis(that.maxZoomVis), viewerCenter(that.viewerCenter),
-  drawOffset(that.drawOffset), drawPriority(that.drawPriority), drawOrder(that.drawOrder),
-  enable(that.enable), fadeIn(that.fadeIn), fadeOut(that.fadeOut),
-  fadeOutTime(that.fadeOutTime), startEnable(that.startEnable), endEnable(that.endEnable),
-  programID(that.programID), extraFrames(that.extraFrames), zBufferRead(that.zBufferRead),
-  zBufferWrite(that.zBufferWrite), renderTargetID(that.renderTargetID), hasExp(that.hasExp)
+BaseInfo::BaseInfo(const BaseInfo &that) :
+    minVis(that.minVis), maxVis(that.minVis), minVisBand(that.minVisBand), maxVisBand(that.maxVisBand),
+    minViewerDist(that.minViewerDist), maxViewerDist(that.maxViewerDist),
+    minZoomVis(that.minZoomVis),maxZoomVis(that.maxZoomVis), viewerCenter(that.viewerCenter),
+    drawOffset(that.drawOffset), drawOrder(that.drawOrder),
+    fadeIn(that.fadeIn), fadeOut(that.fadeOut),
+    fadeOutTime(that.fadeOutTime), startEnable(that.startEnable), endEnable(that.endEnable),
+    programID(that.programID), zoomSlot(that.zoomSlot), drawPriority(that.drawPriority),
+    extraFrames(that.extraFrames), enable(that.enable), zBufferRead(that.zBufferRead),
+    zBufferWrite(that.zBufferWrite), hasExp(that.hasExp), renderTargetID(that.renderTargetID)
 {
 }
     
@@ -190,7 +191,7 @@ BaseInfo::BaseInfo(const Dictionary &dict)
             if ([val isKindOfClass:[NSNumber class]])
             {
                 SingleVertexAttribute valAttr;
-                valAttr.name = [key cStringUsingEncoding:NSASCIIStringEncoding];
+                valAttr.name = [key cStringUsingEncoding:NSASCIIStringEncoding withDefault:""];
                 
                 NSNumber *num = val;
                 valAttr.type = BDFloatType;
@@ -200,7 +201,7 @@ BaseInfo::BaseInfo(const Dictionary &dict)
             } else if ([val isKindOfClass:[UIColor class]])
             {
                 SingleVertexAttribute valAttr;
-                valAttr.name = [key cStringUsingEncoding:NSASCIIStringEncoding];
+                valAttr.name = [key cStringUsingEncoding:NSASCIIStringEncoding withDefault:""];
                 
                 UIColor *col = val;
                 valAttr.type = BDChar4Type;

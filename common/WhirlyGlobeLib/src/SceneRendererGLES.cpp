@@ -260,7 +260,7 @@ bool SceneRendererGLES::hasChanges()
     return SceneRenderer::hasChanges();
 }
 
-void SceneRendererGLES::render(TimeInterval duration)
+void SceneRendererGLES::render(TimeInterval duration, RenderInfo *)
 {
     if (!scene)
         return;
@@ -288,7 +288,7 @@ void SceneRendererGLES::render(TimeInterval duration)
         glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         glEnable(GL_BLEND);
     }
-    
+
     // See if we're dealing with a globe or map view
     float overlapMarginX = 0.0;
     if (__unused const auto mapView = dynamic_cast<Maply::MapView *>(theView))
@@ -301,7 +301,7 @@ void SceneRendererGLES::render(TimeInterval duration)
     const Eigen::Matrix4f modelTrans = Matrix4dToMatrix4f(modelTrans4d);
     const Eigen::Matrix4d viewTrans4d = theView->calcViewMatrix();
     const Eigen::Matrix4f viewTrans = Matrix4dToMatrix4f(viewTrans4d);
-    
+
     // Set up a projection matrix
     const Point2f frameSize(framebufferWidth,framebufferHeight);
     const Eigen::Matrix4d projMat4d = theView->calcProjectionMatrix(frameSize,0.0);
@@ -314,7 +314,7 @@ void SceneRendererGLES::render(TimeInterval duration)
     Eigen::Matrix4f mvpNormalMat4f = mvpMat.inverse().transpose();
     Eigen::Matrix4d modelAndViewNormalMat4d = modelAndViewMat4d.inverse().transpose();
     Eigen::Matrix4f modelAndViewNormalMat = Matrix4dToMatrix4f(modelAndViewNormalMat4d);
-    
+
     switch (zBufferMode)
     {
         case zBufferOn:
@@ -356,7 +356,7 @@ void SceneRendererGLES::render(TimeInterval duration)
         baseFrameInfo.modelTrans = modelTrans;
         baseFrameInfo.modelTrans4d = modelTrans4d;
         baseFrameInfo.scene = scene;
-        baseFrameInfo.frameLen = duration;
+        baseFrameInfo.frameLen = (float)duration;
         baseFrameInfo.currentTime = scene->getCurrentTime();
         baseFrameInfo.projMat = projMat;
         baseFrameInfo.projMat4d = projMat4d;
@@ -433,15 +433,15 @@ void SceneRendererGLES::render(TimeInterval duration)
             perfTimer.stopTiming("Scene processing");
         
         // Work through the available offset matrices (only 1 if we're not wrapping)
-        const std::vector<Matrix4d> &offsetMats = baseFrameInfo.offsetMatrices;
+        const Matrix4dVector &offsetMats = baseFrameInfo.offsetMatrices;
         // Turn these drawables in to a vector
         std::vector<DrawableContainer> drawList;
         std::vector<DrawableRef> screenDrawables;
         std::vector<DrawableRef> generatedDrawables;
-        std::vector<Matrix4d> mvpMats;
-        std::vector<Matrix4d> mvpInvMats;
-        std::vector<Matrix4f> mvpMats4f;
-        std::vector<Matrix4f> mvpInvMats4f;
+        Matrix4dVector mvpMats;
+        Matrix4dVector mvpInvMats;
+        Matrix4fVector mvpMats4f;
+        Matrix4fVector mvpInvMats4f;
         mvpMats.resize(offsetMats.size());
         mvpInvMats.resize(offsetMats.size());
         mvpMats4f.resize(offsetMats.size());
@@ -570,7 +570,7 @@ void SceneRendererGLES::render(TimeInterval duration)
             {
                 renderTarget->clearOnce = false;
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                CheckGLError("SceneRendererES2: glClear");
+                CheckGLError("SceneRendererGLES: glClear");
             }
             
             //bool depthMaskOn = (zBufferMode == zBufferOn);
@@ -610,7 +610,8 @@ void SceneRendererGLES::render(TimeInterval duration)
                 // Figure out the program to use for drawing
                 const SimpleIdentity drawProgramId = drawContain.drawable->getProgram();
                 if (drawProgramId == EmptyIdentity) {
-                    wkLogLevel(Error, "Drawable missing program ID.  Skipping.");
+                    wkLogLevel(Warn, "Drawable %lld (%s) missing program ID.  Skipping.",
+                               drawContain.drawable->getId(), drawContain.drawable->getName().c_str());
                     continue;
                 }
                 if (drawProgramId != curProgramId)
@@ -619,8 +620,8 @@ void SceneRendererGLES::render(TimeInterval duration)
                     auto program = (ProgramGLES *)scene->getProgram(drawProgramId);
                     if (program)
                     {
-                        //                    [renderStateOptimizer setUseProgram:program->getProgram()];
                         glUseProgram(program->getProgram());
+
                         // Assign the lights if we need to
                         if (program->hasLights() && !lights.empty())
                             program->setLights(lights, lightsLastUpdated, &defaultMat, currentMvpMat);
@@ -689,12 +690,14 @@ void SceneRendererGLES::render(TimeInterval duration)
     if (UNLIKELY(reportStats))
         perfTimer.startTiming("Present Renderbuffer");
 
-#ifndef __ANDROID__
-    // Explicitly discard the depth buffer
-    const GLenum discards[]  = {GL_DEPTH_ATTACHMENT};
-    glInvalidateFramebuffer(GL_FRAMEBUFFER,1,discards);
-    CheckGLError("SceneRendererES2: glInvalidateFramebuffer");
-#endif
+    if (invalidateGLDepth)
+    {
+        // Explicitly discard the depth buffer
+        const GLenum discards[] = {GL_DEPTH_ATTACHMENT};
+        glInvalidateFramebuffer(GL_FRAMEBUFFER, 1, discards);
+        CheckGLError("SceneRendererGLES: glInvalidateFramebuffer");
+    }
+
     
     // Subclass with do the presentation
     presentRender();

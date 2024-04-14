@@ -28,9 +28,6 @@ namespace Maply
 MapView::MapView(WhirlyKit::CoordSystemDisplayAdapter *inCoordAdapter)
 {
     coordAdapter = inCoordAdapter;
-    fieldOfView = 60.0 / 360.0 * 2 * (float)M_PI;  // 60 degree field of view
-    imagePlaneSize = nearPlane * tanf(fieldOfView / 2.0);
-    lastChangedTime = TimeGetCurrent();
     continuousZoom = true;
     absoluteMinNearPlane = 0.000001;
     absoluteMinFarPlane = 0.001;
@@ -40,26 +37,22 @@ MapView::MapView(WhirlyKit::CoordSystemDisplayAdapter *inCoordAdapter)
     rotAngle = 0.0;
     wrap = true;
 
-    defaultNearPlane = nearPlane;
-    defaultFarPlane = farPlane;
+    defaultNearPlane = getNearPlane();
+    defaultFarPlane = getFarPlane();
 }
     
-MapView::MapView(const MapView &that)
-: View(that), loc(that.loc), rotAngle(that.rotAngle), wrap(that.wrap),
-absoluteMinHeight(that.absoluteMinHeight), heightInflection(that.heightInflection),
-defaultNearPlane(that.defaultNearPlane), absoluteMinNearPlane(that.absoluteMinNearPlane),
-defaultFarPlane(that.defaultFarPlane), absoluteMinFarPlane(that.absoluteMinFarPlane)
+MapView::MapView(const MapView &that) :
+    View(that), loc(that.loc), rotAngle(that.rotAngle), wrap(that.wrap),
+    absoluteMinHeight(that.absoluteMinHeight), heightInflection(that.heightInflection),
+    defaultNearPlane(that.defaultNearPlane), absoluteMinNearPlane(that.absoluteMinNearPlane),
+    defaultFarPlane(that.defaultFarPlane), absoluteMinFarPlane(that.absoluteMinFarPlane)
 {
 }
     
-MapView::~MapView()
-{    
-}
-
 float MapView::calcZbufferRes()
 {
     // Note: Not right
-    double delta = 0.0001;
+    constexpr double delta = 0.0001;
     
     return delta;
 }
@@ -79,60 +72,51 @@ Eigen::Matrix4d MapView::calcViewMatrix() const
     return rot.matrix();
 }
 
-void MapView::getOffsetMatrices(std::vector<Eigen::Matrix4d> &offsetMatrices,const WhirlyKit::Point2f &frameBufferSize,float bufferSizeX) const
+void MapView::getOffsetMatrices(Matrix4dVector &offsetMatrices,const WhirlyKit::Point2f &frameBufferSize,float bufferSizeX) const
 {
-    Point3d scale = coordAdapter->getScale();
+    const Point3d scale = coordAdapter->getScale();
     
     Point3f ll,ur;
     if (wrap && coordAdapter && coordAdapter->getBounds(ll, ur))
     {
         // Figure out where we are, first off
-        GeoCoord geoLL = coordAdapter->getCoordSystem()->localToGeographic(ll);
-        GeoCoord geoUR = coordAdapter->getCoordSystem()->localToGeographic(ur);
-        float spanX = geoUR.x()-geoLL.x();
-        float offX = loc.x()*scale.x()-geoLL.x();
-        int num = floorf(offX/spanX);
-        std::vector<int> nums;
-        nums.push_back(num);
-        nums.push_back(num-1);
-        nums.push_back(num+1);
-        
-        float localSpanX = ur.x()-ll.x();
+        const GeoCoord geoLL = coordAdapter->getCoordSystem()->localToGeographic(ll);
+        const GeoCoord geoUR = coordAdapter->getCoordSystem()->localToGeographic(ur);
+        const float spanX = geoUR.x()-geoLL.x();
+        const float offX = loc.x()*scale.x()-geoLL.x();
+        const auto num = (int)floor(offX/spanX);
+        const float localSpanX = ur.x()-ll.x();
         
         // See if the framebuffer lands in any of the potential matrices
-        Eigen::Matrix4d modelTrans = calcViewMatrix() * calcModelMatrix();
-        Mbr screenMbr;
-        screenMbr.addPoint(Point2f(-1.0,-1.0));
-        screenMbr.addPoint(Point2f(1.0,1.0));
-        Matrix4d projMat = calcProjectionMatrix(frameBufferSize,0.0);
-        for (unsigned int ii=0;ii<nums.size();ii++)
+        const Matrix4d modelTrans = calcViewMatrix() * calcModelMatrix();
+        const Matrix4d projMat = calcProjectionMatrix(frameBufferSize,0.0);
+        const Matrix4d testMat = projMat * modelTrans;
+        const MbrD screenMbr({ -1.0, -1.0 }, { 1.0, 1.0 });
+
+        for (int thisNum : { num, num - 1, num + 1 })
         {
-            int thisNum = nums[ii];
-            Eigen::Affine3d offsetMat(Eigen::Translation3d(thisNum*localSpanX,0.0,0.0));
-            Eigen::Matrix4d testMat = projMat * modelTrans;
-            Point3d testPts[4];
-            testPts[0] = Point3d(thisNum*localSpanX+ll.x()-bufferSizeX,ll.y(),0.0);
-            testPts[1] = Point3d((thisNum+1)*localSpanX+ll.x()+bufferSizeX,ll.y(),0.0);
-            testPts[2] = Point3d((thisNum+1)*localSpanX+ll.x()+bufferSizeX,ur.y(),0.0);
-            testPts[3] = Point3d(thisNum*localSpanX+ll.x()-bufferSizeX,ur.y(),0.0);
-            Mbr testMbr;
+            const Affine3d offsetMat(Translation3d(thisNum*localSpanX,0.0,0.0));
+            const Point3d testPts[4] = {
+                {  thisNum      * localSpanX + ll.x() - bufferSizeX, ll.y(), 0.0 },
+                { (thisNum + 1) * localSpanX + ll.x() + bufferSizeX, ll.y(), 0.0 },
+                { (thisNum + 1) * localSpanX + ll.x() + bufferSizeX, ur.y(), 0.0 },
+                {  thisNum      * localSpanX + ll.x() - bufferSizeX, ur.y(), 0.0 },
+            };
+            MbrD testMbr;
             for (unsigned int jj=0;jj<4;jj++)
             {
-                Vector4d screenPt = testMat * Vector4d(testPts[jj].x(),testPts[jj].y(),testPts[jj].z(),1.0);
-                screenPt /= screenPt.w();
-                testMbr.addPoint(Point2f(screenPt.x(),screenPt.y()));
+                testMbr.addPoint(Slice(Clip(Point4d(testMat * Pad(testPts[jj], 1.0)))));
             }
             if (testMbr.overlaps(screenMbr))
+            {
                 offsetMatrices.push_back(offsetMat.matrix());
+            }
         }
+    }
 
-        // Don't know why this would happen, but let's not tempt fate
-        if (offsetMatrices.empty())
-            offsetMatrices.push_back(Matrix4d::Identity());
-    } else {
-        // Just pass back the identity matrix
-        Eigen::Matrix4d ident;
-        offsetMatrices.push_back(ident.Identity());
+    if (offsetMatrices.empty())
+    {
+        offsetMatrices.push_back(Matrix4d::Identity());
     }
 }
 
@@ -167,7 +151,7 @@ double MapView::minHeightAboveSurface() const
     if (continuousZoom)
         return absoluteMinHeight;
     else
-        return 1.01*nearPlane;
+        return 1.01 * getNearPlane();
 }
 
 double MapView::maxHeightAboveSurface() const
@@ -191,14 +175,13 @@ void MapView::setLoc(const WhirlyKit::Point3d &newLoc,bool runUpdates)
         if (loc.z() < heightInflection)
         {
             const double t = 1.0 - (heightInflection - loc.z()) / (heightInflection - absoluteMinHeight);
-            nearPlane = t * (defaultNearPlane-absoluteMinNearPlane) + absoluteMinNearPlane;
-            farPlane = loc.z()+nearPlane;
+            setPlanes(t * (defaultNearPlane-absoluteMinNearPlane) + absoluteMinNearPlane,
+                      loc.z() + getNearPlane());
         } else {
-            nearPlane = defaultNearPlane;
-            farPlane = defaultFarPlane;
+            setPlanes(defaultNearPlane, defaultFarPlane);
         }
+        updateParams();
     }
-    imagePlaneSize = nearPlane * tan(fieldOfView / 2.0);
 
     if (runUpdates)
         runViewUpdates();
@@ -255,7 +238,7 @@ Point2f MapView::pointOnScreenFromPlane(const Point3d &inWorldLoc,const Eigen::M
 
     // Intersection with near gives us the same plane as the screen 
     Point3d ray = Point3d(screenPt.x(), screenPt.y(), screenPt.z()) / screenPt.w();
-    ray *= -nearPlane/ray.z();
+    ray *= -getNearPlane()/ray.z();
 
     // Now we need to scale that to the frame
     Point2d ll,ur;

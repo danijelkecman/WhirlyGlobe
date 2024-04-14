@@ -20,6 +20,7 @@
 #import "MaplyViewController.h"
 #import "MaplyAnimateTranslateMomentum.h"
 #import "GlobeView_iOS.h"
+#import "private/MaplyBaseViewController_private.h"
 #import "private/MaplyViewController_private.h"
 #import "private/MaplyInteractionLayer_private.h"
 #import "private/MaplyCoordinateSystem_private.h"
@@ -162,20 +163,25 @@ using namespace Maply;
 // Also used to catch view geometry updates
 struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDelegate, public ViewWatcher
 {
+    MaplyViewControllerAnimationWrapper(MaplyViewController *control) : control(control)
+    {
+    }
+
     // Called by the View to set up view state per frame
-    void updateView(WhirlyKit::View *view)
+    virtual void updateView(WhirlyKit::View *view) override
     {
         [control updateView:(Maply::MapView *)view];
     }
     
     // Called by the view when things are changed
-    virtual void viewUpdated(View *view)
+    virtual void viewUpdated(View *view) override
     {
         [control viewUpdated:view];
     }
 
-    virtual bool isUserMotion() const { return false; }
+    virtual bool isUserMotion() const override { return false; }
 
+private:
     MaplyViewController __weak * control = nil;
 };
 
@@ -184,21 +190,22 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     // Content scale for scroll view mode
     float scale;
     bool scheduledToDraw;
-    bool isPanning,isZooming,isAnimating;
     
     /// Boundary quad that we're to stay within, in display coords
     Point2dVector bounds;
     Point2d bounds2d[4];
     
-    MaplyViewControllerAnimationWrapper animWrapper;
+    std::shared_ptr<MaplyViewControllerAnimationWrapper> animWrapper;
 }
 
-- (instancetype)initWithMapType:(MaplyMapType)mapType
+- (instancetype)initWithMapType:(MaplyMapType)inMapType
 {
     self = [super init];
     if (!self)
         return nil;
-    animWrapper.control = self;
+    mapType = inMapType;
+        
+    animWrapper = std::make_shared<MaplyViewControllerAnimationWrapper>(self);
 
     if (mapType == MaplyMapType3D) {
         _autoMoveToTap = true;
@@ -208,6 +215,9 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
         [self setHints:@{kMaplyRendererLightingMode: @"none"}];
     }
 
+    _isPanning = false;
+    _isZooming = false;
+    _isAnimating = false;
     _pinchGesture = true;
     _rotateGesture = true;
     _doubleTapDragGesture = true;
@@ -224,8 +234,12 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     self = [super init];
     if (!self)
         return nil;
-    animWrapper.control = self;
 
+    animWrapper = std::make_shared<MaplyViewControllerAnimationWrapper>(self);
+
+    _isPanning = false;
+    _isZooming = false;
+    _isAnimating = false;
     _autoMoveToTap = true;
     _rotateGesture = true;
     _doubleTapDragGesture = true;
@@ -242,10 +256,14 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     self = [super init];
     if (!self)
         return nil;
-    animWrapper.control = self;
+
+    animWrapper = std::make_shared<MaplyViewControllerAnimationWrapper>(self);
 
     // Turn off lighting
     [self setHints:@{kMaplyRendererLightingMode: @"none"}];
+    _isPanning = false;
+    _isZooming = false;
+    _isAnimating = false;
     _rotateGesture = true;
     _doubleTapDragGesture = true;
     _twoFingerTapGesture = true;
@@ -307,6 +325,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
 
 - (void) loadSetup_lighting
 {
+#if !MAPLY_MINIMAL
     NSString *lightingType = renderControl->hints[kWGRendererLightingMode];
     int lightingRegular = true;
     if ([lightingType respondsToSelector:@selector(compare:)])
@@ -331,12 +350,18 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
         light.viewDependent = false;
         [self addLight:light];
     }
+#endif //!MAPLY_MINIMAL
 }
 
 - (ViewRef) loadSetup_view
 {
-    if (_coordSys)
-    {
+    if (mapType == MaplyMapTypeOverlay || !_coordSys) {
+        // In this case the view is tied to an outside matrix
+        const auto originLon = 0.0;
+        const auto ll = GeoCoord::CoordFromDegrees(-180.0,-90.0);
+        const auto ur = GeoCoord::CoordFromDegrees(180.0,90.0);
+        coordAdapter = std::make_shared<SphericalMercatorDisplayAdapter>(originLon, ll, ur);
+    } else {
         const auto bbox = [_coordSys getBounds];
         const auto ll3d = Point3d(bbox.ll.x, bbox.ll.y, 0);
         const auto ur3d = Point3d(bbox.ur.x, bbox.ur.y, 0);
@@ -344,21 +369,20 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
         const auto center3d = Point3d(_displayCenter.x,_displayCenter.y,_displayCenter.z);
         // May need to scale this to the space we're expecting
         const auto scaleFactor = (std::abs(diff.x()) > 10.0 || std::abs(diff.y()) > 10.0) ?
-                                    4.0/std::max(diff.x(),diff.y()) : 1.0;
+        4.0/std::max(diff.x(),diff.y()) : 1.0;
         coordAdapter = std::make_shared<GeneralCoordSystemDisplayAdapter>(
-              [_coordSys getCoordSystem].get(),ll3d,ur3d,center3d,
-              Point3d(scaleFactor,scaleFactor,1));
-    } else {
-        const auto originLon = 0.0;
-        const auto ll = GeoCoord::CoordFromDegrees(-180.0,-90.0);
-        const auto ur = GeoCoord::CoordFromDegrees(180.0,90.0);
-        coordAdapter = std::make_shared<SphericalMercatorDisplayAdapter>(originLon, ll, ur);
+                                                                          [_coordSys getCoordSystem].get(),ll3d,ur3d,center3d,
+                                                                          Point3d(scaleFactor,scaleFactor,1));
     }
     
-    mapView = std::make_shared<MapView_iOS>(coordAdapter.get());
-    mapView->continuousZoom = true;
+    if (mapType == MaplyMapTypeOverlay) {
+        mapView = std::make_shared<MapViewOverlay_iOS>(coordAdapter.get());
+    } else {
+        mapView = std::make_shared<MapView_iOS>(coordAdapter.get());
+    }
+    mapView->setContinuousZoom(true);
     mapView->setWrap(_viewWrap);
-    mapView->addWatcher(&animWrapper);
+    mapView->addWatcher(animWrapper);
 
     return mapView;
 }
@@ -375,6 +399,12 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
 {
     [super loadSetup];
     
+    // Make the UIViews transparent to touch
+    if (mapType == MaplyMapTypeOverlay) {
+        self.view.userInteractionEnabled = false;
+        wrapView.userInteractionEnabled = false;
+    }
+    
     allowRepositionForAnnnotations = false;
     
     Point2d ll(0,0),ur(0,0);
@@ -390,47 +420,54 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
         boundUR.x = MAXFLOAT;
     }
     
-    // Wire up the gesture recognizers
-    tapDelegate = [MaplyTapDelegate tapDelegateForView:wrapView mapView:mapView.get()];
-    panDelegate = [MaplyPanDelegate panDelegateForView:wrapView mapView:mapView useCustomPanRecognizer:false];
-    if (_pinchGesture)
-    {
-        pinchDelegate = [MaplyPinchDelegate pinchDelegateForView:wrapView mapView:mapView];
-        pinchDelegate.minZoom = mapView->minHeightAboveSurface();
-        pinchDelegate.maxZoom = mapView->maxHeightAboveSurface();
-    }
-    if(_rotateGesture) {
-        rotateDelegate = [MaplyRotateDelegate rotateDelegateForView:wrapView mapView:mapView.get()];
-        rotateDelegate.rotateThreshold = _rotateGestureThreshold;
-    }
-    const auto __strong tapRecognizer = tapDelegate.gestureRecognizer;
-    if(_doubleTapZoomGesture)
-    {
-        doubleTapDelegate = [MaplyDoubleTapDelegate doubleTapDelegateForView:wrapView mapView:mapView];
-        doubleTapDelegate.minZoom = mapView->minHeightAboveSurface();
-        doubleTapDelegate.maxZoom = mapView->maxHeightAboveSurface();
-        [tapRecognizer requireGestureRecognizerToFail:doubleTapDelegate.gestureRecognizer];
-    }
-    if(_twoFingerTapGesture)
-    {
-        twoFingerTapDelegate = [MaplyTwoFingerTapDelegate twoFingerTapDelegateForView:wrapView mapView:mapView];
-        twoFingerTapDelegate.minZoom = mapView->minHeightAboveSurface();
-        twoFingerTapDelegate.maxZoom = mapView->maxHeightAboveSurface();
-        if (pinchDelegate)
-            [twoFingerTapDelegate.gestureRecognizer requireGestureRecognizerToFail:pinchDelegate.gestureRecognizer];
-        [tapRecognizer requireGestureRecognizerToFail:twoFingerTapDelegate.gestureRecognizer];
-    }
-    if (_doubleTapDragGesture)
-    {
-        doubleTapDragDelegate = [MaplyDoubleTapDragDelegate doubleTapDragDelegateForView:wrapView mapView:mapView];
-        doubleTapDragDelegate.minZoom = mapView->minHeightAboveSurface();
-        doubleTapDragDelegate.maxZoom = mapView->maxHeightAboveSurface();
-        [tapRecognizer requireGestureRecognizerToFail:doubleTapDragDelegate.gestureRecognizer];
-        [panDelegate.gestureRecognizer requireGestureRecognizerToFail:doubleTapDragDelegate.gestureRecognizer];
-    }
-    if(_cancelAnimationOnTouch)
-    {
-        touchDelegate = [MaplyTouchCancelAnimationDelegate touchDelegateForView:wrapView mapView:mapView.get()];
+    if (mapType != MaplyMapTypeOverlay) {
+        // Wire up the gesture recognizers
+        tapDelegate = [MaplyTapDelegate tapDelegateForView:wrapView mapView:mapView.get()];
+        panDelegate = [MaplyPanDelegate panDelegateForView:wrapView mapView:mapView useCustomPanRecognizer:false];
+        if (_pinchGesture)
+        {
+            pinchDelegate = [MaplyPinchDelegate pinchDelegateForView:wrapView mapView:mapView];
+            pinchDelegate.minZoom = mapView->minHeightAboveSurface();
+            pinchDelegate.maxZoom = mapView->maxHeightAboveSurface();
+        }
+        if(_rotateGesture) {
+            rotateDelegate = [MaplyRotateDelegate rotateDelegateForView:wrapView mapView:mapView.get()];
+            rotateDelegate.rotateThreshold = _rotateGestureThreshold;
+        }
+        const auto __strong tapRecognizer = tapDelegate.gestureRecognizer;
+        if(_doubleTapZoomGesture)
+        {
+            doubleTapDelegate = [MaplyDoubleTapDelegate doubleTapDelegateForView:wrapView mapView:mapView];
+            doubleTapDelegate.minZoom = mapView->minHeightAboveSurface();
+            doubleTapDelegate.maxZoom = mapView->maxHeightAboveSurface();
+            doubleTapDelegate.approveAllGestures = self.fastGestures;
+            [tapRecognizer requireGestureRecognizerToFail:doubleTapDelegate.gestureRecognizer];
+        }
+        if(_twoFingerTapGesture)
+        {
+            twoFingerTapDelegate = [MaplyTwoFingerTapDelegate twoFingerTapDelegateForView:wrapView mapView:mapView];
+            twoFingerTapDelegate.minZoom = mapView->minHeightAboveSurface();
+            twoFingerTapDelegate.maxZoom = mapView->maxHeightAboveSurface();
+            twoFingerTapDelegate.approveAllGestures = self.fastGestures;
+            if (pinchDelegate && !self.fastGestures)
+                [twoFingerTapDelegate.gestureRecognizer requireGestureRecognizerToFail:pinchDelegate.gestureRecognizer];
+            [tapRecognizer requireGestureRecognizerToFail:twoFingerTapDelegate.gestureRecognizer];
+        }
+        if (_doubleTapDragGesture)
+        {
+            doubleTapDragDelegate = [MaplyDoubleTapDragDelegate doubleTapDragDelegateForView:wrapView mapView:mapView];
+            doubleTapDragDelegate.minZoom = mapView->minHeightAboveSurface();
+            doubleTapDragDelegate.maxZoom = mapView->maxHeightAboveSurface();
+            if (self.fastGestures)
+                doubleTapDragDelegate.minimumPressDuration = 0.01;
+            [tapRecognizer requireGestureRecognizerToFail:doubleTapDragDelegate.gestureRecognizer];
+            if (!self.fastGestures)
+                [panDelegate.gestureRecognizer requireGestureRecognizerToFail:doubleTapDragDelegate.gestureRecognizer];
+        }
+        if(_cancelAnimationOnTouch)
+        {
+            touchDelegate = [MaplyTouchCancelAnimationDelegate touchDelegateForView:wrapView mapView:mapView.get()];
+        }
     }
 
     if (boundLL.x != boundUR.x || boundLL.y != boundUR.y)
@@ -470,6 +507,33 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     }
     
     mapView->setWrap(_viewWrap);
+}
+
+- (void)setIsPanning:(bool)isPanning
+{
+    _isPanning = isPanning;
+    if (renderControl && renderControl->visualView)
+    {
+        renderControl->visualView->setIsPanning(isPanning);
+    }
+}
+
+- (void)setIsZooming:(bool)isZooming
+{
+    _isZooming = isZooming;
+    if (renderControl && renderControl->visualView)
+    {
+        renderControl->visualView->setIsZooming(isZooming);
+    }
+}
+
+- (void)setIsAnimating:(bool)isAnimating
+{
+    _isAnimating = isAnimating;
+    if (renderControl && renderControl->visualView)
+    {
+        renderControl->visualView->setIsAnimating(isAnimating);
+    }
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -745,8 +809,12 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
 - (void)setHeight:(float)height
 {
     Point3d loc = mapView->getLoc();
-    loc.z() = height;
-    mapView->setLoc(loc, true);
+    if (height != loc.z())
+    {
+        loc.z() = height;
+        mapView->setLoc(loc, true);
+        mapView->setHasZoomed(true);
+    }
 }
 
 /// Set the view extents.  This is the box the view point is allowed to be within.
@@ -758,16 +826,19 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
 /// Set the view extents.  This is the box the view point is allowed to be within.
 - (void)setViewExtentsLL:(MaplyCoordinate)ll ur:(MaplyCoordinate)ur
 {
-    CoordSystemDisplayAdapter *adapter = mapView->coordAdapter;
-    CoordSystem *coordSys = adapter->getCoordSystem();
-    boundLL = ll;    boundUR = ur;
+    const auto adapter = mapView->getCoordAdapter();
+    const CoordSystem *coordSys = adapter->getCoordSystem();
+
+    boundLL = ll;
+    boundUR = ur;
     
     // Convert the bounds to a rectangle in local coordinates
-    Point3f bounds3d[4];
-    bounds3d[0] = adapter->localToDisplay(coordSys->geographicToLocal(GeoCoord(ll.x,ll.y)));
-    bounds3d[1] = adapter->localToDisplay(coordSys->geographicToLocal(GeoCoord(ur.x,ll.y)));
-    bounds3d[2] = adapter->localToDisplay(coordSys->geographicToLocal(GeoCoord(ur.x,ur.y)));
-    bounds3d[3] = adapter->localToDisplay(coordSys->geographicToLocal(GeoCoord(ll.x,ur.y)));
+    const Point3f bounds3d[4] = {
+        adapter->localToDisplay(coordSys->geographicToLocal(GeoCoord(ll.x,ll.y))),
+        adapter->localToDisplay(coordSys->geographicToLocal(GeoCoord(ur.x,ll.y))),
+        adapter->localToDisplay(coordSys->geographicToLocal(GeoCoord(ur.x,ur.y))),
+        adapter->localToDisplay(coordSys->geographicToLocal(GeoCoord(ll.x,ur.y))),
+    };
     bounds.clear();
     for (unsigned int ii=0;ii<4;ii++)
     {
@@ -810,7 +881,9 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     if (newPos.x < boundLL.x)  newPos.x = boundLL.x;
     if (newPos.y < boundLL.y)  newPos.y = boundLL.y;
 
-    Point3d loc = mapView->coordAdapter->localToDisplay(mapView->coordAdapter->getCoordSystem()->geographicToLocal3d(GeoCoord(newPos.x,newPos.y)));
+    const auto adapter = mapView->getCoordAdapter();
+    const CoordSystem *coordSys = adapter->getCoordSystem();
+    Point3d loc = adapter->localToDisplay(coordSys->geographicToLocal3d(GeoCoord(newPos.x,newPos.y)));
     loc.z() = mapView->getLoc().z();
     [self animateToPoint:loc time:howLong];
 }
@@ -830,7 +903,9 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     {
         Point3d oldLoc = mapView->getLoc();
         Point3f diffLoc(whereLoc.x()-oldLoc.x(),whereLoc.y()-oldLoc.y(),0.0);
-        Point3d loc = mapView->coordAdapter->localToDisplay(mapView->coordAdapter->getCoordSystem()->geographicToLocal3d(GeoCoord(newPos.x,newPos.y)));
+        const auto adapter = mapView->getCoordAdapter();
+        const CoordSystem *coordSys = adapter->getCoordSystem();
+        Point3d loc = adapter->localToDisplay(coordSys->geographicToLocal3d(GeoCoord(newPos.x,newPos.y)));
         loc.x() -= diffLoc.x();
         loc.y() -= diffLoc.y();
         loc.z() = oldLoc.z();
@@ -860,7 +935,9 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     if (newPos.x < boundLL.x)  newPos.x = boundLL.x;
     if (newPos.y < boundLL.y)  newPos.y = boundLL.y;
 
-    Point3d loc = mapView->coordAdapter->localToDisplay(mapView->coordAdapter->getCoordSystem()->geographicToLocal3d(GeoCoord(newPos.x,newPos.y)));
+    const auto adapter = mapView->getCoordAdapter();
+    const CoordSystem *coordSys = adapter->getCoordSystem();
+    Point3d loc = adapter->localToDisplay(coordSys->geographicToLocal3d(GeoCoord(newPos.x,newPos.y)));
     loc.z() = newHeight;
     
     [self animateToPoint:loc time:howLong];
@@ -1007,15 +1084,25 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     if (newPos.x < boundLL.x)  newPos.x = boundLL.x;
     if (newPos.y < boundLL.y)  newPos.y = boundLL.y;
     
-    Point3d loc = mapView->coordAdapter->getCoordSystem()->geographicToLocal3d(GeoCoord(newPos.x,newPos.y));
-    loc.z() = height;
+    const auto adapter = mapView->getCoordAdapter();
+    const CoordSystem *coordSys = adapter->getCoordSystem();
+    const Point3d curLoc = coordSys->geographicToLocal3d(GeoCoord(newPos.x,newPos.y));
+    const Point3d newLoc(curLoc.x(), curLoc.y(), height);
 
     // Do a validity check and possibly adjust the center
     Maply::MapView testMapView(*(mapView.get()));
     Point3d newCenter;
-    if ([self withinBounds:loc view:wrapView renderer:renderControl->sceneRenderer.get() mapView:&testMapView newCenter:&newCenter])
+    if ([self withinBounds:newLoc view:wrapView renderer:renderControl->sceneRenderer.get() mapView:&testMapView newCenter:&newCenter])
     {
         mapView->setLoc(newCenter);
+        if (newCenter.x() != curLoc.x() || newCenter.y() != curLoc.y())
+        {
+            mapView->setHasMoved(true);
+        }
+        if (newCenter.z() != curLoc.z())
+        {
+            mapView->setHasZoomed(true);
+        }
     }
 
     [self handleStopMoving:NO];
@@ -1023,8 +1110,9 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
 
 - (MaplyCoordinate)getPosition
 {
-    GeoCoord geoCoord = mapView->coordAdapter->getCoordSystem()->localToGeographic(mapView->coordAdapter->displayToLocal(mapView->getLoc()));
-
+    const auto adapter = mapView->getCoordAdapter();
+    const CoordSystem *coordSys = adapter->getCoordSystem();
+    const GeoCoord geoCoord = coordSys->localToGeographic(adapter->displayToLocal(mapView->getLoc()));
     return {.x = geoCoord.x(), .y = geoCoord.y()};
 }
 
@@ -1035,8 +1123,9 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
 
 - (void)getPosition:(MaplyCoordinate *)pos height:(float *)height
 {
-    Point3d loc = mapView->getLoc();
-    GeoCoord geoCoord = mapView->coordAdapter->getCoordSystem()->localToGeographic(loc);
+    const Point3d loc = mapView->getLoc();
+    const CoordSystem *coordSys = mapView->getCoordAdapter()->getCoordSystem();
+    const GeoCoord geoCoord = coordSys->localToGeographic(loc);
     pos->x = geoCoord.x();  pos->y = geoCoord.y();
     *height = loc.z();
 }
@@ -1062,12 +1151,14 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     if (!renderControl)
         return;
     
-    Point3d localLoc = mapView->coordAdapter->getCoordSystem()->geographicToLocal3d(GeoCoord(animState.pos.x, animState.pos.y));
+    const auto adapter = mapView->getCoordAdapter();
+    Point3d localLoc = adapter->getCoordSystem()->geographicToLocal3d(GeoCoord(animState.pos.x, animState.pos.y));
     localLoc.z() = animState.height;
 
     if (animState.screenPos.x >= 0.0 && animState.screenPos.y >= 0.0)
     {
-        Point3d displayLoc = mapView->coordAdapter->localToDisplay(localLoc);
+        const auto adapter = mapView->getCoordAdapter();
+        Point3d displayLoc = adapter->localToDisplay(localLoc);
         displayLoc.z() = animState.height;
 
         Eigen::Matrix4d modelTrans = mapView->calcFullMatrix();
@@ -1082,7 +1173,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
             displayLoc.y() -= diffLoc.y();
 
         }
-        localLoc = mapView->coordAdapter->displayToLocal(displayLoc);
+        localLoc = adapter->displayToLocal(displayLoc);
     }
     mapView->setLoc(localLoc, false);
     mapView->setRotAngle(-animState.heading, runViewUpdates);
@@ -1121,9 +1212,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     // Tell the delegate what we're up to
     [animationDelegate mapViewController:self startState:stateStart startTime:now endTime:animationDelegateEnd];
     
-    auto delegate = std::make_shared<MaplyViewControllerAnimationWrapper>();
-    delegate->control = self;
-    mapView->setDelegate(std::move(delegate));
+    mapView->setDelegate(std::make_shared<MaplyViewControllerAnimationWrapper>(self));
 }
 
 // Called every frame from within the map view
@@ -1150,13 +1239,14 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     MaplyViewControllerAnimationState *animState = [animationDelegate mapViewController:self stateForTime:now];
     
     // Do a validity check and possibly adjust the center
-    Point3d loc = coordAdapter->getCoordSystem()->geographicToLocal3d(GeoCoord(animState.pos.x,animState.pos.y));
+    const CoordSystem *coordSys = coordAdapter->getCoordSystem();
+    Point3d loc = coordSys->geographicToLocal3d(GeoCoord(animState.pos.x,animState.pos.y));
     loc.z() = animState.height;
     Maply::MapView testMapView(*(mapView.get()));
     Point3d newCenter {0,0,0};
     if ([self withinBounds:loc view:wrapView renderer:renderControl->sceneRenderer.get() mapView:&testMapView newCenter:&newCenter])
     {
-        GeoCoord geoCoord = coordAdapter->getCoordSystem()->localToGeographic(newCenter);
+        GeoCoord geoCoord = coordSys->localToGeographic(newCenter);
         animState.pos = {geoCoord.x(),geoCoord.y()};
         animState.height = newCenter.z();
         
@@ -1176,6 +1266,10 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
 
 - (void)setHeading:(float)heading
 {
+    if (heading != mapView->getRotAngle())
+    {
+        mapView->setHasRotated(true);
+    }
     mapView->setRotAngle(heading,true);
 }
 
@@ -1263,8 +1357,9 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
         return CGPointZero;
     }
 
-    const auto adapter = theView->coordAdapter;
-    const Point3d localPt = adapter->getCoordSystem()->geographicToLocal3d(GeoCoord(geoCoord.x,geoCoord.y));
+    const auto adapter = theView->getCoordAdapter();
+    const CoordSystem *coordSys = adapter->getCoordSystem();
+    const Point3d localPt = coordSys->geographicToLocal3d(GeoCoord(geoCoord.x,geoCoord.y));
     const Point3d displayPt = adapter->localToDisplay(localPt);
     const Eigen::Matrix4d modelTrans = theView->calcFullMatrix();
     const Point2f frameSizeScaled = renderControl->sceneRenderer->getFramebufferSizeScaled();
@@ -1290,7 +1385,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
         *newLoc = loc;
     }
 
-    const auto &coordAdapter = mapView->coordAdapter;
+    const auto &coordAdapter = mapView->getCoordAdapter();
     const auto *coordSys = coordAdapter->getCoordSystem();
 
     // Center the given location
@@ -1440,6 +1535,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     return maxHeight;
 }
 
+#if !MAPLY_MINIMAL
 // Called back on the main thread after the interaction thread does the selection
 - (void)handleSelection:(MaplyTapMessage *)msg didSelect:(NSArray *)selectedObjs
 {
@@ -1494,6 +1590,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
             [self animateToPosition:coord time:1.0];
     }
 }
+#endif //!MAPLY_MINIMAL
 
 
 - (void)tapOnMap:(NSNotification *)note
@@ -1518,7 +1615,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     //    NSLog(@"Pan started");
     
     [self handleStartMoving:true];
-    isPanning = true;
+    self.isPanning = true;
 }
 
 // Called when the pan delegate stops moving
@@ -1527,7 +1624,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     if (note.object != mapView->tag)
         return;
 
-    isPanning = false;
+    self.isPanning = false;
     [self handleStopMoving:true];
 }
 
@@ -1536,8 +1633,20 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     if (note.object != mapView->tag)
         return;
 
+    if (self.fastGestures) {
+        // Cancel any pending recognition of other gestures.
+        // ("If you change this property to NO while a gesture recognizer is currently
+        //   regognizing a gesture, the gesture recognizer transitions to a cancelled state.")
+        UIGestureRecognizer __strong *panRec = panDelegate.gestureRecognizer;
+        panRec.enabled = NO;
+        panRec.enabled = YES;
+        UIGestureRecognizer __strong *tapRec = twoFingerTapDelegate.gestureRecognizer;
+        tapRec.enabled = NO;
+        tapRec.enabled = YES;
+    }
+
     [self handleStartMoving:true];
-    isZooming = true;
+    self.isZooming = true;
 }
 
 - (void) zoomGestureDidEnd:(NSNotification *)note
@@ -1545,7 +1654,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     if (note.object != mapView->tag)
         return;
     
-    isZooming = false;
+    self.isZooming = false;
     [self handleStopMoving:true];
 }
 
@@ -1555,7 +1664,7 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
         return;
     
     [self handleStartMoving:false];
-    isAnimating = true;
+    self.isAnimating = true;
 }
 
 - (void) animationDidEnd:(NSNotification *)note
@@ -1566,14 +1675,16 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
     const auto delegate = mapView->getDelegate();
     const bool userMotion = delegate && delegate->isUserMotion();
 
-    isAnimating = false;
+    self.isAnimating = false;
     [self handleStopMoving:userMotion];
 }
 
 // Convenience routine to handle the end of moving
 - (void)handleStartMoving:(bool)userMotion
 {
-    if (!isPanning && !isZooming && !isAnimating)
+    [super handleStartMoving:userMotion];
+
+    if (!_isPanning && !_isZooming && !_isAnimating)
     {
         const auto __strong delegate = self.delegate;
         if ([delegate respondsToSelector:@selector(maplyViewControllerDidStartMoving:userMotion:)])
@@ -1584,7 +1695,9 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
 // Convenience routine to handle the end of moving
 - (void)handleStopMoving:(bool)userMotion
 {
-    if (isPanning || isZooming || isAnimating)
+    [super handleStopMoving:userMotion];
+
+    if (_isPanning || _isZooming || _isAnimating)
         return;
 
     const auto __strong delegate = self.delegate;
@@ -1705,5 +1818,26 @@ struct MaplyViewControllerAnimationWrapper : public Maply::MapViewAnimationDeleg
         [other requireGestureRecognizerToFail:recognizer];
 }
 
+- (void)assignViewMatrixFromMaplibre:(double * __nonnull)matrixValues scale:(double)scale tileSize:(int)tileSize
+{
+    if (mapType == MaplyMapTypeOverlay) {
+        MapViewOverlay_iOSRef theMapView = std::dynamic_pointer_cast<MapViewOverlay_iOS>(mapView);
+        if (theMapView) {
+            Eigen::Matrix4d inMvp;
+            
+            memcpy(inMvp.data(),matrixValues,sizeof(double)*16);
+                
+            // Apply a scale to our data first
+            double worldSize = tileSize / (M_PI) * pow(2.0,scale) ;
+            // Note: Can see something with this
+        //    double scale = 40075016.68 / (2*8192*M_PI) ;
+            const Eigen::Affine3d scaleTrans(Eigen::Scaling(worldSize,-worldSize,1.0));
+            const Eigen::Affine3d transTrans(Eigen::Translation3d(M_PI,-M_PI,0.0));
+            Eigen::Matrix4d mvp = (inMvp * (scaleTrans * transTrans) ).matrix();
+
+            theMapView->assignMatrix(mvp);
+        }
+    }
+}
 
 @end

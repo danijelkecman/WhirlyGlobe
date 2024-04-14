@@ -267,17 +267,50 @@ using namespace WhirlyKit;
     return MaplyCoordinate3dMake(dispCoord.x(), dispCoord.y(), dispCoord.z());
 }
 
+- (int)zoomSlot
+{
+    return [self getZoomSlot];
+}
+
+- (float)zoomLevel
+{
+    if (samplingLayer)
+    if (const auto disp = samplingLayer->sampleControl.getDisplayControl())
+    if (const auto control = [samplingLayer.quadLayer getController])
+    if (const auto scene = control->getScene())
+    {
+        return scene->getZoomSlotValue(disp->getZoomSlot());
+    }
+    return -1;
+}
+
 - (int)getZoomSlot
 {
-    if (!samplingLayer)
-        return -1;
-    
-    return samplingLayer->sampleControl.getDisplayControl()->getZoomSlot();
+    if (samplingLayer)
+    if (const auto disp = samplingLayer->sampleControl.getDisplayControl())
+    {
+        return disp->getZoomSlot();
+    }
+    return -1;
 }
 
 - (NSObject<MaplyLoaderInterpreter> *)getInterpreter
 {
     return loadInterp;
+}
+
+- (NSString*)label
+{
+    return self->loader ? [NSString stringWithUTF8String:self->loader->getLabel().c_str()] : nil;
+}
+
+- (void)setLabel:(NSString *)label
+{
+    if (self->loader)
+    {
+        const auto cstr = label.UTF8String;
+        self->loader->setLabel(cstr ? cstr : std::string());
+    }
 }
 
 - (void)setInterpreter:(NSObject<MaplyLoaderInterpreter> *)interp
@@ -409,7 +442,8 @@ using namespace WhirlyKit;
         return;
     
     if (loader->getDebugMode())
-        NSLog(@"MaplyQuadImageLoader: Got fetch back for tile %d: (%d,%d) frame %d",tileID.level,tileID.x,tileID.y,frame);
+        NSLog(@"MaplyQuadImageLoader '%s': Got fetch back for tile %d: (%d,%d) frame %d",
+              loader->getLabel().c_str(), tileID.level,tileID.x,tileID.y,frame);
     
     MaplyLoaderReturn *loadData = nil;
     if ([data isKindOfClass:[MaplyLoaderReturn class]]) {
@@ -423,7 +457,8 @@ using namespace WhirlyKit;
         if ([data isKindOfClass:[NSData class]]) {
             [loadData addTileData:data];
         } else if (data != nil) {
-            NSLog(@"MaplyQuadLader:fetchRequestSuccess: client return unknown data type.  Dropping.");
+            NSLog(@"MaplyQuadImageLoader '%s': fetchRequestSuccess: client return unknown data type.  Dropping.",
+                  loader->getLabel().c_str());
         }
     }
 
@@ -665,7 +700,15 @@ using namespace WhirlyKit;
     }
 
     ChangeSet changes;
-    loader->cleanup(nullptr,changes);
+    if (loader)
+    {
+        loader->cleanup(nullptr,changes);
+    }
+    else
+    {
+        // Probably the controller was destroyed first.  Don't do that.
+        wkLogLevel(Warn, "Loader shut down without cleanup");
+    }
 
     if (!changes.empty())
     {
@@ -703,15 +746,41 @@ using namespace WhirlyKit;
         valid = false;
     }
     
-    const auto __strong thread = samplingLayer.layerThread;
-    if (thread)
+    if (const auto __strong thread = samplingLayer.layerThread)
     {
         [self performSelector:@selector(cleanup) onThread:thread withObject:nil waitUntilDone:NO];
     }
     else
     {
-        wkLogLevel(Warn, "MaplyQuadLoader layer thread stopped before shutdown");
-        [self cleanup];
+        __strong auto vc = _viewC;
+        
+        // The sampling layer and/or thread has already been shut down, so we can't do the cleanup
+        // there.  That probably means a loader was not shut down before the map controller it was
+        // set up on.  Try to do the cleanup here.
+        wkLogLevel(Warn, "MaplyQuadLoader layer thread stopped before shutdown (%@)", self.label);
+        try
+        {
+            [self cleanup];
+        }
+        catch (const std::exception &ex)
+        {
+            NSLog(@"Exception in MaplyQuadLoaderBase.shutdown: %s", ex.what());
+            [vc report:@"MaplyQuadLoaderBase.shutdown"
+             exception:[[NSException alloc] initWithName:@"STL Exception"
+                                                  reason:[NSString stringWithUTF8String:ex.what()]
+                                                userInfo:nil]];
+        }
+        catch (NSException *ex)
+        {
+            NSLog(@"Exception in MaplyQuadLoaderBase.shutdown: %@", ex.description);
+            [vc report:@"MaplyQuadLoaderBase.shutdown" exception:ex];
+        }
+        catch (...)
+        {
+            NSLog(@"Exception in MaplyQuadLoaderBase.shutdown");
+            [vc report:@"MaplyQuadLoaderBase.shutdown"
+             exception:[[NSException alloc] initWithName:@"C++ Exception" reason:@"Unknown" userInfo:nil]];
+        }
     }
 }
 

@@ -2,7 +2,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 1/13/11.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -33,20 +33,26 @@ static bool matrixAisSameAsB(const Matrix4d &a,const Matrix4d &b)
 
 WorkGroup::~WorkGroup()
 {
-    for (auto &targetCon : renderTargetContainers) {
-        for (auto &draw : targetCon->drawables) {
-            auto it = draw->workGroupIDs.find(getId());
-            if (it != draw->workGroupIDs.end())
-                draw->workGroupIDs.erase(it);
+    try
+    {
+        for (auto &targetCon : renderTargetContainers)
+        {
+            for (auto &draw : targetCon->drawables)
+            {
+                const auto it = draw->workGroupIDs.find(getId());
+                if (it != draw->workGroupIDs.end())
+                {
+                    draw->workGroupIDs.erase(it);
+                }
+            }
         }
     }
+    WK_STD_DTOR_CATCH()
 }
 
 RenderTargetContainer::RenderTargetContainer(RenderTargetRef renderTarget) :
-    renderTarget(renderTarget),
-    modified(true)
+    renderTarget(std::move(renderTarget))
 {
-
 }
 
 bool WorkGroup::addDrawable(DrawableRef drawable)
@@ -96,14 +102,6 @@ void WorkGroup::addRenderTarget(RenderTargetRef renderTarget)
     auto renderTargetContainer = makeRenderTargetContainer(renderTarget);
     renderTargetContainer->renderTarget = renderTarget;
     renderTargetContainers.push_back(renderTargetContainer);
-}
-    
-SceneRenderer::SceneRenderer()
-{
-}
-    
-SceneRenderer::~SceneRenderer()
-{
 }
     
 void SceneRenderer::init()
@@ -205,7 +203,7 @@ void SceneRenderer::removeDrawable(DrawableRef draw,bool teardown,RenderTeardown
     }
 }
 
-void SceneRenderer::updateWorkGroups(RendererFrameInfo *frameInfo)
+void SceneRenderer::updateWorkGroups(RendererFrameInfo *frameInfo,int numViewOffsets)
 {
     // Look at drawables to move into the active set
     std::vector<DrawableRef> drawsToMoveIn;
@@ -394,13 +392,13 @@ void SceneRenderer::removeExtraFrameRenderRequest(SimpleIdentity drawID)
 void SceneRenderer::updateExtraFrames()
 {
     extraFrames = 0;
-    for (auto it : extraFramesPerID)
+    for (const auto &it : extraFramesPerID)
         extraFrames = std::max(extraFrames,it.second);
 }
 
 void SceneRenderer::removeContinuousRenderRequest(SimpleIdentity drawID)
 {
-    SimpleIDSet::iterator it = contRenderRequests.find(drawID);
+    const auto it = contRenderRequests.find(drawID);
     if (it != contRenderRequests.end())
         contRenderRequests.erase(it);
 }
@@ -412,6 +410,10 @@ void SceneRenderer::setScene(WhirlyKit::Scene *newScene)
     if (scene)
     {
         scene->setRenderer(this);
+
+        // Consider the lights to have changed so that they get updated,
+        // even if we're still using the defaults set up in init().
+        lightsLastUpdated = scene->getCurrentTime();
     }
 }
 

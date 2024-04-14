@@ -2,7 +2,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 2/14/19.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,16 +22,11 @@
 namespace WhirlyKit
 {
 
-QuadFrameInfo::QuadFrameInfo()
-: frameIndex(-1)
-{
-}
-    
 QuadLoaderReturn::QuadLoaderReturn(int generation) :
-    ident(0,0,0), cancel(false), hasError(false),
-    generation(generation), frame(std::make_shared<QuadFrameInfo>())
+    ident(0,0,0),
+    frame(std::make_shared<QuadFrameInfo>()),
+    generation(generation)
 {
-    frame->frameIndex = -1;
 }
 
 QuadLoaderReturn::~QuadLoaderReturn()

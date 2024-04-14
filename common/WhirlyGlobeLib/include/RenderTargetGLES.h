@@ -34,7 +34,7 @@ class RenderTargetGLES : public RenderTarget
 public:
     RenderTargetGLES();
     RenderTargetGLES(SimpleIdentity newID);
-    virtual ~RenderTargetGLES();
+    virtual ~RenderTargetGLES() = default;
     
     // Set up the render target
     bool init(SceneRenderer *renderer,Scene *scene,SimpleIdentity targetTexID);
@@ -63,11 +63,11 @@ public:
     void setTargetTexture(TextureBase *tex);
         
     /// OpenGL ES Name for the frame buffer
-    GLuint framebuffer;
+    GLuint framebuffer = 0;
     /// OpenGL ES Name for the color buffer
-    GLuint colorbuffer;
+    GLuint colorbuffer = 0;
     /// OpenGL ES Name for the depth buffer
-    GLuint depthbuffer;
+    GLuint depthbuffer = 0;
     
 protected:
     void init();

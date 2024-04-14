@@ -3,7 +3,7 @@
  *  WhirlyGlobeLib
  *
  *  Created by Steve Gifford on 2/1/11.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@ namespace WhirlyKit
  */
 class BasicDrawableInstance : virtual public Drawable
 {
-friend class BasicDrawableInstanceBuilder;
-    
+    friend class BasicDrawableInstanceBuilder;
+
 public:
     /**
      ReuseStyle - Takes the base geometry and tweaks a few settings (like color, width)
@@ -48,7 +48,7 @@ public:
     
     /// Construct empty
     BasicDrawableInstance(const std::string &name);
-    virtual ~BasicDrawableInstance();
+    virtual ~BasicDrawableInstance() = default;
     
     /// Return the master being instanced
     BasicDrawableRef getMaster() const;
@@ -158,19 +158,20 @@ public:
     SimpleIdentity getRenderTarget() const;
     
     /// Texture ID and relative override info
-    class TexInfo
+    struct TexInfo
     {
-    public:
-        TexInfo() : texId(EmptyIdentity), relLevel(0), relX(0), relY(0), size(0), borderTexel(0) { }
-        
+        TexInfo() = default;
         // Initialize from a basic drawable's version of the tex info
-        TexInfo(BasicDrawable::TexInfo &basicTexInfo);
+        TexInfo(const BasicDrawable::TexInfo &basicTexInfo);
 
         /// Texture ID within the scene
-        SimpleIdentity texId;
+        SimpleIdentity texId = EmptyIdentity;
         /// Our use of this texture relative to its native resolution
-        int size,borderTexel;
-        int relLevel,relX,relY;
+        int size = 0;
+        int borderTexel = 0;
+        int relLevel = 0;
+        int relX = 0;
+        int relY = 0;
     };
 
     /// Set the texture ID for a specific slot.  You get this from the Texture object.

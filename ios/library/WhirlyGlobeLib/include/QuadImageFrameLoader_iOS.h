@@ -109,10 +109,18 @@ class QuadImageFrameLoader_ios : public QuadImageFrameLoader
 {
 public:
     // Displaying a single frame
-    QuadImageFrameLoader_ios(const SamplingParams &params,NSObject<MaplyTileInfoNew> *inTileInfo,Mode mode);
+    QuadImageFrameLoader_ios(const SamplingParams &params,
+                             NSObject<MaplyTileInfoNew> *inTileInfo,
+                             Mode mode,
+                             FrameLoadMode frameMode = FrameLoadMode::All);
+
     // Displaying multiple animated frames (or one with multiple data sources)
-    QuadImageFrameLoader_ios(const SamplingParams &params,NSArray<NSObject<MaplyTileInfoNew> *> *inFrameInfos,Mode mode);
-    ~QuadImageFrameLoader_ios();
+    QuadImageFrameLoader_ios(const SamplingParams &params,
+                             NSArray<NSObject<MaplyTileInfoNew> *> *inFrameInfos,
+                             Mode mode,
+                             FrameLoadMode frameMode = FrameLoadMode::All);
+
+    virtual ~QuadImageFrameLoader_ios() = default;
         
     NSObject<MaplyTileFetcher> * __weak tileFetcher;
     NSArray<NSObject<MaplyTileInfoNew> *> *frameInfos;
@@ -123,7 +131,7 @@ public:
     /// Number of frames we're representing
     virtual int getNumFrames() const override;
     
-    // Contruct a platform specific BatchOps for passing to tile fetcher
+    // Construct a platform specific BatchOps for passing to tile fetcher
     // (we don't know about tile fetchers down here)
     virtual QIFBatchOps *makeBatchOps(PlatformThreadInfo *threadInfo) override;
     

@@ -2,7 +2,7 @@
  *  WhirlyGlobeComponent
  *
  *  Created by Steve Gifford on 7/21/12.
- *  Copyright 2011-2022 mousebird consulting
+ *  Copyright 2011-2023 mousebird consulting
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #import <WhirlyGlobe_iOS.h>
 #import "control/WhirlyGlobeViewController.h"
 #import "private/WhirlyGlobeViewController_private.h"
+#import "private/MaplyBaseViewController_private.h"
 #import "private/GlobeDoubleTapDelegate_private.h"
 #import "private/GlobeDoubleTapDragDelegate_private.h"
 #import "private/GlobePanDelegate_private.h"
@@ -128,27 +129,31 @@ using namespace WhirlyGlobe;
 // Also used to catch view geometry updates
 struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, public ViewWatcher
 {
+    WhirlyGlobeViewWrapper(WhirlyGlobeViewController *control) : control(control)
+    {
+    }
+
     // Called by the View to set up view state per frame
-    void updateView(WhirlyKit::View *view)
+    virtual void updateView(WhirlyKit::View *view) override
     {
         [control updateView:(WhirlyGlobe::GlobeView *)view];
     }
 
     // Called by the view when things are changed
-    virtual void viewUpdated(View *view)
+    virtual void viewUpdated(View *view) override
     {
         [control viewUpdated:view];
     }
 
-    virtual bool isUserMotion() const { return false; }
+    virtual bool isUserMotion() const override { return false; }
 
+private:
     WhirlyGlobeViewController __weak * control = nil;
 };
 
 @implementation WhirlyGlobeViewController
 {
-    bool isPanning,isRotating,isZooming,isAnimating,isTilting;
-    WhirlyGlobeViewWrapper viewWrapper;
+    std::shared_ptr<WhirlyGlobeViewWrapper> viewWrapper;
     CGPoint globeCenter;
 }
 
@@ -158,6 +163,11 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     if (!self)
         return nil;
     
+    _isPanning = false;
+    _isRotating = false;
+    _isZooming = false;
+    _isAnimating = false;
+    _isTilting = false;
     _autoMoveToTap = true;
     _doubleTapZoomGesture = true;
     _twoFingerTapGesture = true;
@@ -165,7 +175,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     _zoomTapFactor = 2.0;
     _zoomTapAnimationDuration = 0.1;
     globeCenter = {-1000,-1000};
-    viewWrapper.control = self;
+    viewWrapper = std::make_shared<WhirlyGlobeViewWrapper>(self);
 
     return self;
 }
@@ -215,9 +225,9 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 // Create the globe view
 - (ViewRef) loadSetup_view
 {
-    globeView = GlobeView_iOSRef(new GlobeView_iOS());
-    globeView->continuousZoom = true;
-    globeView->addWatcher(&viewWrapper);
+    globeView = std::make_shared<GlobeView_iOS>();
+    globeView->setContinuousZoom(true);
+    globeView->addWatcher(viewWrapper);
     
     return globeView;
 }
@@ -253,6 +263,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
         doubleTapDelegate.maxZoom = pinchDelegate.maxHeight;
         doubleTapDelegate.zoomTapFactor = _zoomTapFactor;
         doubleTapDelegate.zoomAnimationDuration = _zoomTapAnimationDuration;
+        doubleTapDelegate.approveAllGestures = self.fastGestures;
     }
     const auto tapRecognizer = tapDelegate.gestureRecognizer;
     if(_twoFingerTapGesture)
@@ -262,9 +273,10 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
         twoFingerTapDelegate.maxZoom = pinchDelegate.maxHeight;
         twoFingerTapDelegate.zoomTapFactor = _zoomTapFactor;
         twoFingerTapDelegate.zoomAnimationDuration = _zoomTapAnimationDuration;
+        twoFingerTapDelegate.approveAllGestures = self.fastGestures;
         
         const auto twoFingerRecognizer = twoFingerTapDelegate.gestureRecognizer;
-        if (pinchDelegate) {
+        if (pinchDelegate && !self.fastGestures) {
             [twoFingerRecognizer requireGestureRecognizerToFail:pinchDelegate.gestureRecognizer];
         }
         [tapRecognizer requireGestureRecognizerToFail:twoFingerRecognizer];
@@ -274,11 +286,60 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
         doubleTapDragDelegate = [WhirlyGlobeDoubleTapDragDelegate doubleTapDragDelegateForView:wrapView globeView:globeView.get()];
         doubleTapDragDelegate.minZoom = pinchDelegate.minHeight;
         doubleTapDragDelegate.maxZoom = pinchDelegate.maxHeight;
+        if (self.fastGestures)
+            doubleTapDragDelegate.minimumPressDuration = 0.01;
         const auto doubleTapRecognizer = doubleTapDragDelegate.gestureRecognizer;
         [tapRecognizer requireGestureRecognizerToFail:doubleTapRecognizer];
-        [panDelegate.gestureRecognizer requireGestureRecognizerToFail:doubleTapRecognizer];
+        if (!self.fastGestures)
+            [panDelegate.gestureRecognizer requireGestureRecognizerToFail:doubleTapRecognizer];
     }
 }
+
+- (void)setIsPanning:(bool)isPanning
+{
+    _isPanning = isPanning;
+    if (renderControl && renderControl->visualView)
+    {
+        renderControl->visualView->setIsPanning(isPanning);
+    }
+}
+
+- (void)setIsRotating:(bool)isRotating
+{
+    _isRotating = isRotating;
+    if (renderControl && renderControl->visualView)
+    {
+        renderControl->visualView->setIsRotating(isRotating);
+    }
+}
+
+- (void)setIsTilting:(bool)isTilting
+{
+    _isZooming = isTilting;
+    if (renderControl && renderControl->visualView)
+    {
+        renderControl->visualView->setIsTilting(isTilting);
+    }
+}
+
+- (void)setIsZooming:(bool)isZooming
+{
+    _isZooming = isZooming;
+    if (renderControl && renderControl->visualView)
+    {
+        renderControl->visualView->setIsZooming(isZooming);
+    }
+}
+
+- (void)setIsAnimating:(bool)isAnimating
+{
+    _isAnimating = isAnimating;
+    if (renderControl && renderControl->visualView)
+    {
+        renderControl->visualView->setIsAnimating(isAnimating);
+    }
+}
+
 
 - (void)viewWillAppear:(BOOL)animated
 {
@@ -488,6 +549,10 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 
 - (void)setHeight:(float)height
 {
+    if (height != globeView->getHeightAboveGlobe())
+    {
+        globeView->setHasZoomed(true);
+    }
     globeView->setHeightAboveGlobe(height);
 }
 
@@ -629,6 +694,10 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 
 - (void)setTilt:(float)newTilt
 {
+    if (newTilt != globeView->getTilt())
+    {
+        globeView->setHasTilted(true);
+    }
     globeView->setTilt(newTilt);
 }
 
@@ -639,6 +708,10 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 
 - (void)setRoll:(double)newRoll
 {
+    if (newRoll != globeView->getRoll())
+    {
+        globeView->setHasRotated(true); // do we need to track roll & rotate separately?
+    }
     globeView->setRoll(newRoll, true);
 }
 
@@ -795,7 +868,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     auto frameSizeScaled = renderControl->sceneRenderer->getFramebufferSizeScaled();
     if (globeView->pointOnSphereFromScreen(loc2f, modelTrans, frameSizeScaled, whereLoc, true))
     {
-        CoordSystemDisplayAdapter *coordAdapter = globeView->coordAdapter;
+        const auto coordAdapter = globeView->getCoordAdapter();
         Vector3d destPt = coordAdapter->localToDisplay(coordAdapter->getCoordSystem()->geographicToLocal3d(GeoCoord(newPos.x,newPos.y)));
         Eigen::Quaterniond endRot;
         endRot = QuatFromTwoVectors(destPt, whereLoc);
@@ -942,10 +1015,17 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
         return;
     }
     
+    const auto oldRot = globeView->getRotQuat();
+    
     [self rotateToPoint:GeoCoord(newPos.x,newPos.y) time:0.0];
     // If there's a pinch delegate, ask it to calculate the height.
     if (tiltControlDelegate) {
         self.tilt = tiltControlDelegate->tiltFromHeight(globeView->getHeightAboveGlobe());
+    }
+
+    if (oldRot.dot(globeView->getRotQuat()) != 1.0)
+    {
+        globeView->setHasMoved(true);
     }
  }
 
@@ -961,6 +1041,11 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     }
 
     [self setPosition:newPos];
+
+    if (height != globeView->getHeightAboveGlobe())
+    {
+        globeView->setHasZoomed(true);
+    }
     globeView->setHeightAboveGlobe(height);
 }
 
@@ -974,9 +1059,21 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
         NSLog(@"WhirlyGlobeViewController: Invalid location passed to setPosition:");
         return;
     }
+
+    const auto oldRot = globeView->getRotQuat();
     
     [self rotateToPoint:GeoCoord(newPos.x,newPos.y) time:0.0];
-    globeView->setHeightAboveGlobe(height);
+
+    if (oldRot.dot(globeView->getRotQuat()) != 1.0)
+    {
+        globeView->setHasMoved(true);
+    }
+
+    if (height != globeView->getHeightAboveGlobe())
+    {
+        globeView->setHasZoomed(true);
+    }
+
     // If there's a pinch delegate, ask it to calculate the height.
     if (tiltControlDelegate)
         self.tilt = tiltControlDelegate->tiltFromHeight(globeView->getHeightAboveGlobe());
@@ -1014,6 +1111,10 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     Eigen::AngleAxisd rot(heading,localPt);
     Quaterniond newRotQuat = posQuat * rot;
     
+    if (newRotQuat.dot(globeView->getRotQuat()) != 1.0)
+    {
+        globeView->setHasRotated(true);
+    }
     globeView->setRotQuat(newRotQuat);
 }
 
@@ -1037,7 +1138,8 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     if (!renderControl)
         return {0.0, 0.0};
 
-    GeoCoord geoCoord = globeView->coordAdapter->getCoordSystem()->localToGeographic(globeView->coordAdapter->displayToLocal(globeView->currentUp()));
+    const auto adapter = globeView->getCoordAdapter();
+    const GeoCoord geoCoord = adapter->getCoordSystem()->localToGeographic(adapter->displayToLocal(globeView->currentUp()));
 
 	return {.x = geoCoord.lon(), .y = geoCoord.lat()};
 }
@@ -1047,7 +1149,8 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     if (!renderControl)
         return {0.0, 0.0};
 
-    Point2d geoCoord = globeView->coordAdapter->getCoordSystem()->localToGeographicD(globeView->coordAdapter->displayToLocal(globeView->currentUp()));
+    const auto adapter = globeView->getCoordAdapter();
+    const Point2d geoCoord = adapter->getCoordSystem()->localToGeographicD(adapter->displayToLocal(globeView->currentUp()));
 
 	return {.x = geoCoord.x(), .y = geoCoord.y()};
 }
@@ -1069,7 +1172,8 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     
     *height = globeView->getHeightAboveGlobe();
     Point3d localPt = globeView->currentUp();
-    GeoCoord geoCoord = globeView->coordAdapter->getCoordSystem()->localToGeographic(globeView->coordAdapter->displayToLocal(localPt));
+    const auto adapter = globeView->getCoordAdapter();
+    GeoCoord geoCoord = adapter->getCoordSystem()->localToGeographic(adapter->displayToLocal(localPt));
     pos->x = geoCoord.lon();  pos->y = geoCoord.lat();
 }
 
@@ -1082,7 +1186,8 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 
     *height = globeView->getHeightAboveGlobe();
     Point3d localPt = globeView->currentUp();
-    Point2d geoCoord = globeView->coordAdapter->getCoordSystem()->localToGeographicD(globeView->coordAdapter->displayToLocal(localPt));
+    const auto adapter = globeView->getCoordAdapter();
+    Point2d geoCoord = adapter->getCoordSystem()->localToGeographicD(adapter->displayToLocal(localPt));
     pos->x = geoCoord.x();  pos->y = geoCoord.y();
 }
 
@@ -1178,7 +1283,9 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 
 - (void) handleStartMoving:(bool)userMotion
 {
-    if (!isPanning && !isRotating && !isZooming && !isAnimating && !isTilting)
+    [super handleStartMoving:userMotion];
+    
+    if (!_isPanning && !_isRotating && !_isZooming && !_isAnimating && !_isTilting)
     {
         const auto __strong delegate = _delegate;
         if ([delegate respondsToSelector:@selector(globeViewControllerDidStartMoving:userMotion:)])
@@ -1225,7 +1332,9 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 // Convenience routine to handle the end of moving
 - (void)handleStopMoving:(bool)userMotion
 {
-    if (isPanning || isRotating || isZooming || isAnimating || isTilting)
+    [super handleStopMoving:userMotion];
+
+    if (_isPanning || _isRotating || _isZooming || _isAnimating || _isTilting)
         return;
     
     const auto __strong delegate = _delegate;
@@ -1245,7 +1354,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
         return;
     
     [self handleStartMoving:true];
-    isTilting = true;
+    self.isTilting = true;
 }
 
 // Called when the tilt delegate stops moving
@@ -1254,7 +1363,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     if (note.object != globeView->tag)
         return;
     
-    isTilting = false;
+    self.isTilting = false;
     [self handleStopMoving:true];
 }
 
@@ -1267,7 +1376,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 //    NSLog(@"Pan started");
 
     [self handleStartMoving:true];
-    isPanning = true;
+    self.isPanning = true;
 }
 
 // Called when the pan delegate stops moving
@@ -1278,7 +1387,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     
 //    NSLog(@"Pan ended");
     
-    isPanning = false;
+    self.isPanning = false;
     [self handleStopMoving:true];
 }
 
@@ -1286,11 +1395,23 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 {
     if (note.object != globeView->tag)
         return;
-    
+
+    if (self.fastGestures) {
+        // Cancel any pending recognition of other gestures.
+        // ("If you change this property to NO while a gesture recognizer is currently
+        //   regognizing a gesture, the gesture recognizer transitions to a cancelled state.")
+        UIGestureRecognizer __strong *panRec = panDelegate.gestureRecognizer;
+        panRec.enabled = NO;
+        panRec.enabled = YES;
+        UIGestureRecognizer __strong *tapRec = twoFingerTapDelegate.gestureRecognizer;
+        tapRec.enabled = NO;
+        tapRec.enabled = YES;
+    }
+
 //    NSLog(@"Pinch started");
     
     [self handleStartMoving:true];
-    isZooming = true;
+    self.isZooming = true;
 }
 
 - (void) pinchDidEnd:(NSNotification *)note
@@ -1300,7 +1421,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     
 //    NSLog(@"Pinch ended");
 
-    isZooming = false;
+    self.isZooming = false;
     [self handleStopMoving:true];
 }
 
@@ -1312,7 +1433,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 //    NSLog(@"Rotate started");
     
     [self handleStartMoving:true];
-    isRotating = true;
+    self.isRotating = true;
 }
 
 - (void) rotateDidEnd:(NSNotification *)note
@@ -1322,7 +1443,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     
 //    NSLog(@"Rotate ended");
     
-    isRotating = false;
+    self.isRotating = false;
     [self handleStopMoving:true];
 }
 
@@ -1334,7 +1455,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 //    NSLog(@"Animation started");
 
     [self handleStartMoving:false];
-    isAnimating = true;
+    self.isAnimating = true;
 }
 
 - (void) animationDidEnd:(NSNotification *)note
@@ -1348,7 +1469,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     const auto delegate = globeView->getDelegate();
     const bool userMotion = delegate && delegate->isUserMotion();
     
-    isAnimating = false;
+    self.isAnimating = false;
     knownAnimateEndRot = false;
     [self handleStopMoving:userMotion];
 }
@@ -1553,10 +1674,11 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
         return CGPointZero;
     }
 
-    Point3d pt = theView->coordAdapter->localToDisplay(theView->coordAdapter->getCoordSystem()->geographicToLocal3d(GeoCoord(geoCoord.x,geoCoord.y)));
-    
-    Eigen::Matrix4d modelTrans = theView->calcFullMatrix();
-    
+    const auto adapter = theView->getCoordAdapter();
+    const Point3d pt = adapter->localToDisplay(adapter->getCoordSystem()->geographicToLocal3d({geoCoord.x,geoCoord.y}));
+
+    const Eigen::Matrix4d modelTrans = theView->calcFullMatrix();
+
     auto screenPt = theView->pointOnScreenFromSphere(pt, &modelTrans, frameSizeScaled);
     return CGPointMake(screenPt.x(),screenPt.y());
 }
@@ -1574,7 +1696,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
         return false;
     }
 
-    const auto adapter = renderControl->visualView->coordAdapter;
+    const auto adapter = renderControl->visualView->getCoordAdapter();
     const Point3d localPt = adapter->getCoordSystem()->geographicToLocal3d(GeoCoord(geoCoord.x,geoCoord.y));
     const Point3d displayPt = adapter->localToDisplay(localPt);
     const Point3f displayPtf = displayPt.cast<float>();
@@ -1614,7 +1736,7 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
         return false;
     }
 
-    const auto *coordAdapter = theView->coordAdapter;
+    const auto *coordAdapter = theView->getCoordAdapter();
     const auto *coordSys = coordAdapter->getCoordSystem();
     const auto frameSize = renderControl->sceneRenderer->getFramebufferSizeScaled();
 
@@ -1663,7 +1785,8 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 	Eigen::Matrix4d theTransform = globeView->calcFullMatrix();
     if (globeView->pointOnSphereFromScreen(Point2f(screenPt.x,screenPt.y), theTransform, renderControl->sceneRenderer->getFramebufferSizeScaled(), hit, true))
     {
-        Point3d geoC = renderControl->visualView->coordAdapter->getCoordSystem()->localToGeocentric(renderControl->visualView->coordAdapter->displayToLocal(hit));
+        const auto adapter = renderControl->visualView->getCoordAdapter();
+        Point3d geoC = adapter->getCoordSystem()->localToGeocentric(adapter->displayToLocal(hit));
         retCoords[0] = geoC.x();  retCoords[1] = geoC.y();  retCoords[2] = geoC.z();
         
         // Note: Obviously doing something stupid here
@@ -1777,10 +1900,8 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     
     // Tell the delegate what we're up to
     [animationDelegate globeViewController:self startState:stateStart startTime:now endTime:animationDelegateEnd];
-    
-    WhirlyGlobeViewWrapper *delegate = new WhirlyGlobeViewWrapper();
-    delegate->control = self;
-    globeView->setDelegate(GlobeViewAnimationDelegateRef(delegate));
+
+    globeView->setDelegate(std::make_shared<WhirlyGlobeViewWrapper>(self));
 }
 
 - (void)setViewState:(WhirlyGlobeViewControllerAnimationState *)animState
@@ -1816,7 +1937,8 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
     }
     
     // Start with a rotation from the clean start state to the location
-    Point3d worldLoc = globeView->coordAdapter->localToDisplay(globeView->coordAdapter->getCoordSystem()->geographicToLocal3d(GeoCoord(animState.pos.x,animState.pos.y)));
+    const auto adapter = globeView->getCoordAdapter();
+    const Point3d worldLoc = adapter->localToDisplay(adapter->getCoordSystem()->geographicToLocal3d(GeoCoord(animState.pos.x,animState.pos.y)));
     Eigen::Quaterniond posRot = QuatFromTwoVectors(worldLoc, startLoc);
     
     // Orient with north up.  Either because we want that or we're about do do a heading
@@ -1892,9 +2014,9 @@ struct WhirlyGlobeViewWrapper : public WhirlyGlobe::GlobeViewAnimationDelegate, 
 - (WhirlyGlobeViewControllerAnimationState *)viewStateForLookAt:(MaplyCoordinate)coord tilt:(float)tilt heading:(float)heading altitude:(float)alt range:(float)range
 {
     Vector3f north(0,0,1);
-    WhirlyKit::CoordSystemDisplayAdapter *coordAdapter = globeView->coordAdapter;
-    WhirlyKit::CoordSystem *coordSys = coordAdapter->getCoordSystem();
-    Vector3f p0norm = coordAdapter->localToDisplay(coordSys->geographicToLocal(WhirlyKit::GeoCoord(coord.x,coord.y)));
+    const CoordSystemDisplayAdapter *coordAdapter = globeView->getCoordAdapter();
+    const CoordSystem *coordSys = coordAdapter->getCoordSystem();
+    Vector3f p0norm = coordAdapter->localToDisplay(coordSys->geographicToLocal(GeoCoord(coord.x,coord.y)));
     // Position we're looking at in display coords
     Vector3f p0 = p0norm * (1.0 + alt);
     
@@ -2036,8 +2158,9 @@ static const float FullExtentEps = 1e-5;
     }
     
     // Current location the user is over
-    Point3d localPt = globeView->currentUp();
-    GeoCoord currentLoc = globeView->coordAdapter->getCoordSystem()->localToGeographic(globeView->coordAdapter->displayToLocal(localPt));
+    const Point3d localPt = globeView->currentUp();
+    const auto adapter = globeView->getCoordAdapter();
+    const GeoCoord currentLoc = adapter->getCoordSystem()->localToGeographic(adapter->displayToLocal(localPt));
 
     // Toss in the current location
     std::vector<Mbr> mbrs(1);

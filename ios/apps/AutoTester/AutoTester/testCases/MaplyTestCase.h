@@ -10,6 +10,7 @@
 #import <WhirlyGlobe/WhirlyGlobeComponent.h>
 #import <WhirlyGlobe/MaplyComponent.h>
 #import <WhirlyGlobe/MaplyComponentObject.h>
+#import <WhirlyGlobe/MaplyRenderController.h>
 #import <WhirlyGlobe/MaplyViewController.h>
 #import <WhirlyGlobe/WhirlyGlobeViewController.h>
 
@@ -20,6 +21,7 @@
 @class MaplyCoordinateSystem;
 @protocol WhirlyGlobeViewControllerDelegate;
 @protocol MaplyViewControllerDelegate;
+@protocol MaplyErrorReportingDelegate;
 
 typedef void (^TestCaseResult)(MaplyTestCase * _Nonnull testCase);
 
@@ -28,7 +30,9 @@ typedef NS_OPTIONS(NSUInteger, MaplyTestCaseImplementations) {
 	MaplyTestCaseImplementationMap   = 1 << 2,
 };
 
-@interface MaplyTestCase : NSObject <WhirlyGlobeViewControllerDelegate,MaplyViewControllerDelegate>
+@interface MaplyTestCase : NSObject <WhirlyGlobeViewControllerDelegate,
+                                     MaplyViewControllerDelegate,
+                                     MaplyErrorReportingDelegate>
 
 - (instancetype _Nonnull)init;
 - (instancetype _Nonnull)initWithName:(NSString *_Nonnull)name supporting:(MaplyTestCaseImplementations)types;
@@ -36,11 +40,23 @@ typedef NS_OPTIONS(NSUInteger, MaplyTestCaseImplementations) {
 - (void)startGlobe:(UINavigationController * __nonnull)nav;
 - (void)startMap:(UINavigationController * __nonnull)nav;
 
+// Called synchronously after the controller is created but before it's attached
+- (void)preSetUpWithGlobe:(WhirlyGlobeViewController * _Nonnull)globeVC;
+- (void)preSetUpWithMap:(MaplyViewController * _Nonnull)mapVC;
+
+// Called asynchronously after the controller is attached to the view
 - (void)setUpWithGlobe:(WhirlyGlobeViewController * _Nonnull)globeVC;
 - (void)setUpWithMap:(MaplyViewController * _Nonnull)mapVC;
 
 - (void)stop;
 - (MaplyCoordinateSystem * _Nullable)customCoordSystem;
+
+- (void)onError:(NSError * __nonnull)err
+        withTag:(NSString * __nonnull)tag
+          viewC:(NSObject<MaplyRenderControllerProtocol> * __nonnull)viewC;
+- (void)onException:(NSException * __nonnull)err
+            withTag:(NSString * __nonnull)tag
+              viewC:(NSObject<MaplyRenderControllerProtocol> * __nonnull)viewC;
 
 @property (nonatomic, strong) NSString * _Nonnull name;
 
